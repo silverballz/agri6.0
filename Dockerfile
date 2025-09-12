@@ -1,98 +1,36 @@
-# Multi-stage build for Agricultural Monitoring Platform
+# AgriFlux - Lightweight Docker image for multiple platforms
+FROM python:3.9-slim
 
-# Build stage
-FROM python:3.9-slim as builder
+# Set working directory
+WORKDIR /app
 
-# Install build dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    gdal-bin \
-    libgdal-dev \
-    libspatialindex-dev \
-    gcc \
-    g++ \
+    build-essential \
     curl \
+    software-properties-common \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV GDAL_CONFIG=/usr/bin/gdal-config
+# Copy requirements first for better caching
+COPY requirements-render.txt .
 
-WORKDIR /app
-
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
-
-# Production stage
-FROM python:3.9-slim as production
-
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y \
-    gdal-bin \
-    libgdal-dev \
-    libspatialindex-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV GDAL_CONFIG=/usr/bin/gdal-config
-ENV PATH=/home/appuser/.local/bin:$PATH
-
-WORKDIR /app
-
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash appuser
-
-# Copy Python packages from builder stage
-COPY --from=builder /root/.local /home/appuser/.local
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements-render.txt
 
 # Copy application code
-COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser run_dashboard.py .
-COPY --chown=appuser:appuser README.md .
+COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/data /app/models /app/logs /app/backups && \
-    chown -R appuser:appuser /app
+# Create streamlit config directory
+RUN mkdir -p /root/.streamlit
 
-# Switch to non-root user
-USER appuser
+# Copy streamlit config
+COPY .streamlit/config.toml /root/.streamlit/config.toml
 
-# Expose port for Streamlit
+# Expose port
 EXPOSE 8501
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
-# Default command
-CMD ["streamlit", "run", "run_dashboard.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableCORS=false", "--server.enableXsrfProtection=false"]
-
-# Development stage (for local development)
-FROM production as development
-
-USER root
-
-# Install development dependencies
-RUN apt-get update && apt-get install -y \
-    vim \
-    git \
-    htop \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install development Python packages
-RUN pip install --no-cache-dir \
-    pytest \
-    pytest-cov \
-    black \
-    flake8 \
-    jupyter
-
-USER appuser
-
-# Override command for development
-CMD ["streamlit", "run", "run_dashboard.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true"]
+# Run the application
+CMD ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
