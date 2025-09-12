@@ -1,0 +1,5 @@
+# Ultra-minimal requirements for Streamlit Community Cloud
+streamlit
+pandas
+numpy
+plotly

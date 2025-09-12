@@ -22,13 +22,7 @@ from dashboard.pages import (
     data_export
 )
 
-# Page configuration
-st.set_page_config(
-    page_title="AgriFlux - Smart Agricultural Intelligence",
-    page_icon="🌱",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Page configuration is handled in streamlit_app.py
 
 # Dark Mode CSS for AgriFlux
 st.markdown("""
