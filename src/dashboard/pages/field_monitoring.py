@@ -161,109 +161,59 @@ def display_interactive_map():
 def add_monitoring_zones(map_obj):
     """Add monitoring zones with vegetation index coloring"""
     
-    # Load Ludhiana GeoJSON data and create mock agricultural zones
-    import json
-    import os
+    # Create agricultural zones within Ludhiana area (simplified for free deployment)
+    zones = [
+        {
+            "name": "Ludhiana North Farm",
+            "coordinates": [[31.12, 75.78], [31.13, 75.78], [31.13, 75.80], [31.12, 75.80]],
+            "ndvi": 0.78,
+            "area": 450,
+            "crop": "Wheat"
+        },
+        {
+            "name": "Pakhowal Road Fields", 
+            "coordinates": [[31.10, 75.82], [31.11, 75.82], [31.11, 75.84], [31.10, 75.84]],
+            "ndvi": 0.72,
+            "area": 380,
+            "crop": "Rice"
+        },
+        {
+            "name": "Sidhwan Bet Area",
+            "coordinates": [[31.08, 75.80], [31.09, 75.80], [31.09, 75.82], [31.08, 75.82]],
+            "ndvi": 0.85,
+            "area": 320,
+            "crop": "Sugarcane"
+        },
+        {
+            "name": "Raikot Agricultural Zone",
+            "coordinates": [[31.11, 75.76], [31.12, 75.76], [31.12, 75.78], [31.11, 75.78]],
+            "ndvi": 0.69,
+            "area": 520,
+            "crop": "Cotton"
+        },
+        {
+            "name": "Khanna District Fields",
+            "coordinates": [[31.09, 75.84], [31.10, 75.84], [31.10, 75.86], [31.09, 75.86]],
+            "ndvi": 0.63,
+            "area": 290,
+            "crop": "Maize"
+        }
+    ]
     
-    # Try to load the test.geojson file
-    try:
-        geojson_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'test.geojson')
-        with open(geojson_path, 'r') as f:
-            ludhiana_data = json.load(f)
-        
-        # Extract Ludhiana boundary coordinates
-        ludhiana_coords = ludhiana_data['features'][0]['geometry']['coordinates'][0]
-        
-        # Create agricultural zones within Ludhiana area
-        zones = [
-            {
-                "name": "Ludhiana North Farm",
-                "coordinates": [[31.12, 75.78], [31.13, 75.78], [31.13, 75.80], [31.12, 75.80]],
-                "ndvi": 0.78,
-                "area": 450,
-                "crop": "Wheat"
-            },
-            {
-                "name": "Pakhowal Road Fields", 
-                "coordinates": [[31.10, 75.82], [31.11, 75.82], [31.11, 75.84], [31.10, 75.84]],
-                "ndvi": 0.72,
-                "area": 380,
-                "crop": "Rice"
-            },
-            {
-                "name": "Sidhwan Bet Area",
-                "coordinates": [[31.08, 75.80], [31.09, 75.80], [31.09, 75.82], [31.08, 75.82]],
-                "ndvi": 0.85,
-                "area": 320,
-                "crop": "Sugarcane"
-            },
-            {
-                "name": "Raikot Agricultural Zone",
-                "coordinates": [[31.11, 75.76], [31.12, 75.76], [31.12, 75.78], [31.11, 75.78]],
-                "ndvi": 0.69,
-                "area": 520,
-                "crop": "Cotton"
-            },
-            {
-                "name": "Khanna District Fields",
-                "coordinates": [[31.09, 75.84], [31.10, 75.84], [31.10, 75.86], [31.09, 75.86]],
-                "ndvi": 0.63,
-                "area": 290,
-                "crop": "Maize"
-            }
-        ]
-        
-        # Add the main Ludhiana AOI boundary
-        folium.Polygon(
-            locations=[[coord[1], coord[0]] for coord in ludhiana_coords],  # Swap lat/lon
-            color='blue',
-            weight=3,
-            fillColor='lightblue',
-            fillOpacity=0.1,
-            popup=folium.Popup("Ludhiana 10km x 10km AOI", max_width=200),
-            tooltip="Ludhiana Area of Interest"
-        ).add_to(map_obj)
-        
-    except Exception as e:
-        st.error(f"Could not load Ludhiana GeoJSON data: {e}")
-        # Fallback to default zones
-        zones = [
-            {
-                "name": "Ludhiana North Farm",
-                "coordinates": [[31.12, 75.78], [31.13, 75.78], [31.13, 75.80], [31.12, 75.80]],
-                "ndvi": 0.78,
-                "area": 450,
-                "crop": "Wheat"
-            },
-            {
-                "name": "Pakhowal Road Fields", 
-                "coordinates": [[31.10, 75.82], [31.11, 75.82], [31.11, 75.84], [31.10, 75.84]],
-                "ndvi": 0.72,
-                "area": 380,
-                "crop": "Rice"
-            },
-            {
-                "name": "Sidhwan Bet Area",
-                "coordinates": [[31.08, 75.80], [31.09, 75.80], [31.09, 75.82], [31.08, 75.82]],
-                "ndvi": 0.85,
-                "area": 320,
-                "crop": "Sugarcane"
-            },
-            {
-                "name": "Raikot Agricultural Zone",
-                "coordinates": [[31.11, 75.76], [31.12, 75.76], [31.12, 75.78], [31.11, 75.78]],
-                "ndvi": 0.69,
-                "area": 520,
-                "crop": "Cotton"
-            },
-            {
-                "name": "Khanna District Fields",
-                "coordinates": [[31.09, 75.84], [31.10, 75.84], [31.10, 75.86], [31.09, 75.86]],
-                "ndvi": 0.63,
-                "area": 290,
-                "crop": "Maize"
-            }
-        ]
+    # Add Ludhiana AOI boundary (hardcoded coordinates for free deployment)
+    ludhiana_boundary = [
+        [31.055, 75.765], [31.055, 75.855], [31.145, 75.855], [31.145, 75.765]
+    ]
+    
+    folium.Polygon(
+        locations=ludhiana_boundary,
+        color='blue',
+        weight=3,
+        fillColor='lightblue',
+        fillOpacity=0.1,
+        popup=folium.Popup("Ludhiana 10km x 10km AOI", max_width=200),
+        tooltip="Ludhiana Area of Interest"
+    ).add_to(map_obj)
     
     # Color mapping based on NDVI values
     def get_zone_color(ndvi):
