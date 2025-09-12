@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Ludhiana_10kmx10km_AOI_2025-05-28"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [75.765, 31.055],
+          [75.855, 31.055],
+          [75.855, 31.145],
+          [75.765, 31.145],
+          [75.765, 31.055]
+        ]]
+      }
+    }
+  ]
+}

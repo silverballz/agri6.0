@@ -1,0 +1,28 @@
+# AgriFlux Free Deployment Requirements
+# Optimized for free tier limitations
+
+# Core Streamlit
+streamlit>=1.28.0
+streamlit-folium>=0.15.0
+
+# Data processing (lightweight versions)
+pandas>=1.5.0
+numpy>=1.21.0
+
+# Visualization
+plotly>=5.11.0
+folium>=0.14.0
+
+# Geospatial (essential only)
+shapely>=1.8.0
+
+# Date handling
+python-dateutil>=2.8.0
+
+# Configuration
+pyyaml>=6.0
+
+# Optional: Remove heavy dependencies for free deployment
+# rasterio>=1.3.0  # Comment out for lighter deployment
+# geopandas>=0.12.0  # Comment out for lighter deployment
+# gdal>=3.4.0  # Comment out for lighter deployment
