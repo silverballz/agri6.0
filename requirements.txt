@@ -2,30 +2,30 @@
 # Optimized for cloud deployment
 
 # Core Dashboard
-streamlit==1.28.0
-streamlit-folium==0.15.0
+streamlit>=1.28.0
+streamlit-folium>=0.15.0
 
 # Data Processing
-pandas==1.5.3
-numpy==1.24.3
-python-dateutil==2.8.2
+pandas>=1.5.0
+numpy>=1.21.0,<2.0.0
+python-dateutil>=2.8.0
 
 # Visualization
-plotly==5.17.0
-folium==0.14.0
+plotly>=5.11.0
+folium>=0.14.0
 
 # Geospatial Processing (lightweight - no GDAL dependencies)
-shapely==2.0.1
+shapely>=2.0.0
 
 # Image Processing
-Pillow==10.0.0
+Pillow>=10.0.0
 
-# Machine Learning
-scikit-learn==1.3.0
-scipy==1.11.3
+# Machine Learning & Statistics
+scikit-learn>=1.2.0
+scipy>=1.9.0
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv>=1.0.0
 
 # Note: rasterio, geopandas, fiona require GDAL system libraries
 # These are made optional for cloud deployment

@@ -12,9 +12,14 @@ from datetime import datetime, timedelta
 import sys
 import os
 from pathlib import Path
-from scipy import stats
 
-# Optional import for rasterio (not available on all platforms)
+# Optional imports
+try:
+    from scipy import stats
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
 try:
     import rasterio
     RASTERIO_AVAILABLE = True
