@@ -1,0 +1,21 @@
+{
+  "generated_at": "2025-12-08T15:33:34.550389",
+  "num_scenarios": 3,
+  "num_time_points": 5,
+  "num_alerts": 8,
+  "image_dimensions": [
+    100,
+    100
+  ],
+  "scenarios": [
+    "healthy_field",
+    "stressed_field",
+    "mixed_field"
+  ],
+  "alert_severities": {
+    "critical": 2,
+    "high": 2,
+    "medium": 2,
+    "low": 2
+  }
+}

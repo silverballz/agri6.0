@@ -64,9 +64,10 @@ secrets/*.yml
 secrets/*.yaml
 !secrets/*.example.*
 
-# Data files (keep test data)
+# Data files (keep test data and demo data)
 data/
 !data/test/
+!data/demo/
 backups/
 
 # Models (keep example models)
