@@ -13,6 +13,21 @@ import os
 # Add src to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+# Import error handling and dependency checking
+from utils.error_handler import setup_logging, logger, display_error_summary
+from utils.dependency_checker import check_dependencies_on_startup
+
+# Import UI components and help system
+# Temporarily disabled to fix import issues
+# try:
+#     from dashboard.ui_components import (
+#         ColorScheme, Icons, HelpText,
+#         show_vegetation_index_help, show_feature_help
+#     )
+#     from dashboard.help_system import show_quick_help, show_faq_section
+# except ImportError:
+#     pass
+
 # Import dashboard pages
 from dashboard.pages import (
     overview,
@@ -22,71 +37,74 @@ from dashboard.pages import (
     data_export
 )
 
-# Page configuration is handled in streamlit_app.py
+# Page configuration
+st.set_page_config(
+    page_title="🌱 AgriFlux - Smart Agricultural Intelligence",
+    page_icon="🌱",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Dark Mode CSS for AgriFlux
+# Professional AgriFlux Color Scheme
 st.markdown("""
 <style>
-    /* Dark mode global styling */
+    /* Clean professional theme */
     .stApp {
-        background-color: #0e1117 !important;
-        color: #ffffff !important;
+        background-color: #1a1d29 !important;
+        color: #e0e0e0 !important;
     }
     
-    /* Main container dark styling */
+    /* Main container styling */
     .main .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
         max-width: 100%;
-        background-color: #0e1117 !important;
-        color: #ffffff !important;
+        background-color: #1a1d29 !important;
     }
     
-    /* Sidebar dark styling */
-    .css-1d391kg {
-        background-color: #1e2329 !important;
-        color: #ffffff !important;
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #252936 !important;
     }
     
-    .sidebar .sidebar-content {
-        background-color: #1e2329 !important;
-        padding: 1rem;
-        color: #ffffff !important;
-    }
-    
-    /* AgriFlux branding dark */
+    /* AgriFlux branding */
     .agriflux-brand {
         font-weight: bold;
         font-size: 1.5rem;
         text-align: center;
-        margin-bottom: 1rem;
-        padding: 0.5rem 0;
-        color: #4caf50 !important;
-        background: linear-gradient(135deg, #1e2329 0%, #2d3748 100%);
+        margin-bottom: 0.5rem;
+        padding: 0.8rem;
+        color: #66bb6a !important;
+        background-color: #2d3748;
         border-radius: 10px;
+        border: 1px solid #66bb6a;
     }
     
     .agriflux-tagline {
         font-size: 0.85rem;
         text-align: center;
-        margin-top: -0.5rem;
         margin-bottom: 1.5rem;
         font-style: italic;
-        color: #a0aec0 !important;
+        color: #9ca3af !important;
     }
     
-    /* Dark metric cards */
+    /* Metric cards */
     .metric-container {
-        background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
-        border-radius: 15px;
+        background-color: #2d3748;
+        border-radius: 12px;
         padding: 1.5rem;
         margin: 0.5rem;
-        border: 1px solid #4a5568;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        border: 1px solid #3d4a5c;
+        transition: all 0.2s ease;
+    }
+    
+    .metric-container:hover {
+        border-color: #66bb6a;
+        box-shadow: 0 4px 12px rgba(102, 187, 106, 0.15);
     }
     
     .metric-title {
-        color: #4caf50 !important;
+        color: #9ca3af !important;
         font-size: 0.9rem;
         font-weight: 600;
         margin-bottom: 0.5rem;
@@ -102,105 +120,99 @@ st.markdown("""
     .metric-delta {
         font-size: 0.8rem;
         margin-top: 0.5rem;
-    }
-    
-    .metric-delta-positive {
-        color: #4caf50 !important;
-    }
-    
-    .metric-delta-negative {
-        color: #f44336 !important;
-    }
-    
-    /* Dark sidebar elements */
-    .css-1d391kg .stSelectbox label,
-    .css-1d391kg .stMultiSelect label,
-    .css-1d391kg .stDateInput label,
-    .css-1d391kg .stCheckbox label {
-        color: #ffffff !important;
         font-weight: 500;
     }
     
-    .css-1d391kg .stSelectbox > div > div {
-        background-color: #2d3748 !important;
-        color: #ffffff !important;
-        border: 1px solid #4a5568 !important;
+    .metric-delta-positive {
+        color: #66bb6a !important;
     }
     
-    .css-1d391kg .stMultiSelect > div > div {
-        background-color: #2d3748 !important;
-        color: #ffffff !important;
-        border: 1px solid #4a5568 !important;
+    .metric-delta-negative {
+        color: #ef5350 !important;
     }
     
-    /* Dark buttons */
+    /* Sidebar elements */
+    [data-testid="stSidebar"] label {
+        color: #e0e0e0 !important;
+        font-weight: 500;
+    }
+    
+    /* Buttons */
     .stButton > button {
-        background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%) !important;
+        background-color: #66bb6a !important;
         color: #ffffff !important;
         border: none !important;
-        border-radius: 10px !important;
-        padding: 0.5rem 1rem !important;
-        font-weight: 500 !important;
-        transition: all 0.3s ease !important;
+        border-radius: 8px !important;
+        padding: 0.5rem 1.2rem !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease !important;
     }
     
     .stButton > button:hover {
-        background: linear-gradient(135deg, #66bb6a 0%, #388e3c 100%) !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3) !important;
+        background-color: #81c784 !important;
+        box-shadow: 0 4px 12px rgba(102, 187, 106, 0.3) !important;
     }
     
-    /* Dark text elements */
-    .stMarkdown, .stText, h1, h2, h3, h4, h5, h6, p {
+    /* Text elements */
+    h1, h2, h3 {
         color: #ffffff !important;
     }
     
-    /* Status indicators dark */
-    .status-healthy { color: #4caf50 !important; font-weight: bold; }
-    .status-warning { color: #ff9800 !important; font-weight: bold; }
-    .status-critical { color: #f44336 !important; font-weight: bold; }
+    /* Status indicators */
+    .status-healthy { 
+        color: #66bb6a !important; 
+        font-weight: 600;
+    }
+    .status-warning { 
+        color: #ffa726 !important; 
+        font-weight: 600;
+    }
+    .status-critical { 
+        color: #ef5350 !important; 
+        font-weight: 600;
+    }
     
-    /* Dark alert styling */
+    /* Alert styling */
     .alert-high {
-        background-color: #2d1b1b !important;
-        border-left: 4px solid #f44336 !important;
+        background-color: #3d2626 !important;
+        border-left: 4px solid #ef5350 !important;
         padding: 1rem;
         margin: 0.5rem 0;
-        color: #ffffff !important;
+        color: #ffcdd2 !important;
         border-radius: 8px;
     }
     
     .alert-medium {
-        background-color: #2d2419 !important;
-        border-left: 4px solid #ff9800 !important;
+        background-color: #3d3226 !important;
+        border-left: 4px solid #ffa726 !important;
         padding: 1rem;
         margin: 0.5rem 0;
-        color: #ffffff !important;
+        color: #ffe0b2 !important;
         border-radius: 8px;
     }
     
     .alert-low {
-        background-color: #1b2d1b !important;
-        border-left: 4px solid #4caf50 !important;
+        background-color: #263d26 !important;
+        border-left: 4px solid #66bb6a !important;
         padding: 1rem;
         margin: 0.5rem 0;
-        color: #ffffff !important;
+        color: #b9f6ca !important;
         border-radius: 8px;
     }
     
-    /* Dark scrollbar */
+    /* Scrollbar */
     ::-webkit-scrollbar {
         width: 8px;
-        background-color: #1e2329;
+        background-color: #252936;
     }
     
     ::-webkit-scrollbar-thumb {
-        background-color: #4a5568;
+        background-color: #3d4a5c;
         border-radius: 4px;
     }
     
     ::-webkit-scrollbar-thumb:hover {
-        background-color: #4caf50;
+        background-color: #66bb6a;
     }
     
     /* Responsive design for tablets and mobile */
@@ -220,7 +232,7 @@ st.markdown("""
         }
         
         .metric-value {
-            font-size: 1.5rem;
+            font-size: 1.8rem;
         }
     }
 </style>
@@ -242,7 +254,15 @@ def initialize_session_state():
     if 'selected_indices' not in st.session_state:
         st.session_state.selected_indices = ['NDVI', 'SAVI']
     
-
+    # Demo mode settings
+    if 'demo_mode' not in st.session_state:
+        st.session_state.demo_mode = False
+    
+    if 'demo_scenario' not in st.session_state:
+        st.session_state.demo_scenario = 'healthy_field'
+    
+    if 'demo_data' not in st.session_state:
+        st.session_state.demo_data = None
     
     # Alert management
     if 'acknowledged_alerts' not in st.session_state:
@@ -281,9 +301,25 @@ def create_sidebar_navigation():
     </div>
     """, unsafe_allow_html=True)
     
-    # Help button
+    # Help button with improved functionality
     if st.sidebar.button("❓ Help & Documentation", help="Access user guides, tutorials, and support resources"):
-        show_help_modal()
+        st.session_state.show_help = not st.session_state.get('show_help', False)
+    
+    # Display help if toggled
+    if st.session_state.get('show_help', False):
+        st.sidebar.markdown("### 📚 Quick Help")
+        with st.sidebar.expander("🚀 Getting Started"):
+            st.markdown("1. Select fields\n2. Choose date range\n3. Pick indices\n4. Navigate pages")
+        with st.sidebar.expander("📊 NDVI Values"):
+            st.markdown("• 0.8-1.0: Excellent 🟢\n• 0.6-0.8: Healthy 🟢\n• 0.4-0.6: Moderate 🟡\n• <0.4: Stressed 🔴")
+        
+        # Link to full documentation
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 📖 Full Documentation")
+        st.sidebar.markdown("[Quick Start Guide](../docs/QUICK_START_GUIDE.md)")
+        st.sidebar.markdown("[Interpretation Guide](../docs/INTERPRETATION_GUIDE.md)")
+        st.sidebar.markdown("[User Guide](../docs/user-guide.md)")
+        st.sidebar.markdown("[FAQ](../docs/faq.md)")
     
     st.sidebar.markdown("---")
     
@@ -358,6 +394,91 @@ def create_sidebar_navigation():
     )
     st.session_state.selected_indices = selected_indices
     
+    # Add help links for each index
+    if selected_indices:
+        with st.sidebar.expander("ℹ️ Learn About Selected Indices"):
+            for index in selected_indices:
+                st.markdown(f"**{index}**: Vegetation health indicator")
+    
+    st.sidebar.markdown("---")
+    
+    # Demo mode section
+    st.sidebar.subheader("🎬 Demo Mode")
+    
+    # Import demo manager with absolute path to demo data
+    from utils.demo_data_manager import get_demo_manager
+    import os
+    # Get the project root directory (2 levels up from dashboard)
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+    demo_data_path = os.path.join(project_root, 'data', 'demo')
+    demo_manager = get_demo_manager(demo_data_dir=demo_data_path)
+    
+    # Check if demo data is available
+    if demo_manager.is_demo_data_available():
+        # Demo mode toggle
+        demo_mode_enabled = st.sidebar.checkbox(
+            "Enable Demo Mode",
+            value=st.session_state.demo_mode,
+            key="demo_mode_toggle",
+            help="Load pre-configured demo data for quick demonstrations. Includes 3 field scenarios with time series, alerts, and predictions."
+        )
+        
+        # If demo mode was just enabled, load the data
+        if demo_mode_enabled and not st.session_state.demo_mode:
+            with st.spinner("Loading demo data..."):
+                if demo_manager.load_demo_data():
+                    st.session_state.demo_mode = True
+                    st.session_state.demo_data = demo_manager
+                    st.sidebar.success("✅ Demo data loaded!")
+                    st.rerun()
+                else:
+                    st.sidebar.error("❌ Failed to load demo data")
+        
+        # If demo mode was just disabled
+        elif not demo_mode_enabled and st.session_state.demo_mode:
+            st.session_state.demo_mode = False
+            st.session_state.demo_data = None
+            st.sidebar.info("Demo mode disabled")
+            st.rerun()
+        
+        # If demo mode is active, show scenario selector
+        if st.session_state.demo_mode and st.session_state.demo_data:
+            st.sidebar.markdown("**Select Demo Scenario:**")
+            
+            scenario_options = {
+                'healthy_field': '🌱 Healthy Field',
+                'stressed_field': '⚠️ Stressed Field',
+                'mixed_field': '🔄 Mixed Field'
+            }
+            
+            selected_scenario = st.sidebar.selectbox(
+                "Scenario",
+                options=list(scenario_options.keys()),
+                format_func=lambda x: scenario_options[x],
+                index=list(scenario_options.keys()).index(st.session_state.demo_scenario),
+                key="demo_scenario_selector",
+                help="Choose a field scenario to demonstrate different health conditions"
+            )
+            
+            if selected_scenario != st.session_state.demo_scenario:
+                st.session_state.demo_scenario = selected_scenario
+                st.rerun()
+            
+            # Show scenario description
+            if st.session_state.demo_data:
+                description = st.session_state.demo_data.get_scenario_description(selected_scenario)
+                st.sidebar.caption(description)
+            
+            # Exit demo mode button
+            st.sidebar.markdown("---")
+            if st.sidebar.button("🚪 Exit Demo Mode", help="Return to real data mode"):
+                st.session_state.demo_mode = False
+                st.session_state.demo_data = None
+                st.sidebar.success("Exited demo mode")
+                st.rerun()
+    else:
+        st.sidebar.info("📦 Demo data not available. Run `python scripts/generate_demo_data.py` to generate demo data.")
+    
     st.sidebar.markdown("---")
     
     # System status
@@ -416,69 +537,37 @@ def display_system_status():
             unsafe_allow_html=True
         )
 
-def show_help_modal():
-    """Display help modal with quick start guide"""
-    st.sidebar.markdown("### 📚 AgriFlux Quick Start")
-    
-    with st.sidebar.expander("🚀 Getting Started", expanded=True):
-        st.markdown("""
-        **Welcome to AgriFlux!**
-        
-        1. **Select your fields** in the Monitoring Zones filter
-        2. **Choose a date range** for analysis
-        3. **Pick vegetation indices** to display
-        4. **Navigate between pages** using the menu above
-        
-        💡 **Tip**: Start with the Overview page for a comprehensive summary.
-        """)
-    
-    with st.sidebar.expander("📊 Understanding Vegetation Health"):
-        st.markdown("""
-        **NDVI (Normalized Difference Vegetation Index)**
-        - Range: -1 to +1
-        - 0.8-1.0: Excellent health 🟢
-        - 0.6-0.8: Good health 🟡
-        - 0.4-0.6: Moderate stress 🟠
-        - <0.4: High stress 🔴
-        
-        **AgriFlux Color System:**
-        - 🟢 **Healthy**: Thriving vegetation
-        - 🟡 **Moderate**: Monitor closely
-        - 🟠 **Stressed**: Investigate soon
-        - 🔴 **Critical**: Immediate attention
-        """)
-    
-    with st.sidebar.expander("🚨 Smart Alert System"):
-        st.markdown("""
-        **AgriFlux Alert Levels:**
-        - 🔴 **Critical**: Act immediately
-        - 🟠 **High**: Action within 24h
-        - 🟡 **Medium**: Monitor (48h)
-        - 🔵 **Info**: Awareness only
-        
-        **AI-Powered Alerts:**
-        - Vegetation stress detection
-        - Pest risk predictions
-        - Irrigation optimization
-        - Weather impact warnings
-        """)
-    
-    with st.sidebar.expander("📞 Support & Resources"):
-        st.markdown("""
-        **Get Help:**
-        - 📖 [User Guide](docs/user-guide.md)
-        - 🔧 [Technical Docs](docs/technical-documentation.md)
-        - 💬 Contact: support@agriflux.com
-        - 📞 Phone: 1-800-AGRIFLUX
-        
-        **Learning Resources:**
-        - Interactive tutorials
-        - Weekly training webinars
-        - Personalized onboarding
-        """)
+# Help modal function removed - now using help_system.py module
 
 def display_header():
     """Display main header with key metrics in dark theme"""
+    
+    # Show demo mode badge if active
+    if st.session_state.get('demo_mode', False):
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); 
+                    padding: 1rem; border-radius: 10px; text-align: center; 
+                    margin-bottom: 1rem; border: 2px solid #ff8787;">
+            <h3 style="color: #ffffff; margin: 0;">🎬 DEMO MODE ACTIVE</h3>
+            <p style="color: #ffffff; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                Showing pre-configured demo data for demonstration purposes
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Show current scenario info
+        scenario_name = st.session_state.get('demo_scenario', 'healthy_field')
+        if st.session_state.demo_data:
+            description = st.session_state.demo_data.get_scenario_description(scenario_name)
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%); 
+                        padding: 0.75rem; border-radius: 8px; text-align: center; 
+                        margin-bottom: 1.5rem; border: 1px solid #4caf50;">
+                <p style="color: #ffffff; margin: 0; font-size: 1rem;">
+                    <strong>Current Scenario:</strong> {description}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
     
     st.markdown('<h2 style="color: #ffffff; text-align: center; margin-bottom: 2rem;">🌱 AgriFlux Intelligence Dashboard</h2>', unsafe_allow_html=True)
     
@@ -534,6 +623,42 @@ def get_active_alert_count():
 
 def main():
     """Main application entry point"""
+    
+    # Set up logging
+    setup_logging()
+    logger.info("AgriFlux Dashboard starting...")
+    
+    # Check dependencies on startup
+    system_ready = check_dependencies_on_startup()
+    
+    # Display error summary in sidebar
+    display_error_summary()
+    
+    # If critical issues exist, show warning and limited functionality
+    if not system_ready:
+        st.error("⚠️ **Critical System Issues Detected**")
+        st.warning("Some required dependencies are missing. Please install them to use the full dashboard.")
+        st.info("Check the System Health Details in the sidebar for more information.")
+        
+        # Show installation instructions
+        with st.expander("📦 Installation Instructions", expanded=True):
+            st.markdown("""
+            ### Install Required Dependencies
+            
+            Run the following command to install all required packages:
+            
+            ```bash
+            pip install -r requirements.txt
+            ```
+            
+            ### Verify Installation
+            
+            After installation, refresh this page to verify all dependencies are installed correctly.
+            """)
+        
+        # Still allow limited navigation
+        st.markdown("---")
+        st.info("You can still navigate the dashboard, but some features may not work correctly.")
     
     # Initialize session state
     initialize_session_state()

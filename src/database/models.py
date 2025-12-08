@@ -11,7 +11,7 @@ from shapely.geometry import Polygon
 from shapely import wkt
 
 from .connection import DatabaseConnection
-from ..models import SatelliteImage, MonitoringZone, SensorLocation, Alert, IndexTimeSeries
+# from ..models import SatelliteImage, MonitoringZone, SensorLocation, Alert, IndexTimeSeries
 
 
 class DatabaseModels:

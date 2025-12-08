@@ -10,7 +10,13 @@ import io
 import base64
 import json
 import os
+import sys
 from typing import Dict, List, Any
+
+# Add src to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+
+from utils.error_handler import safe_page, handle_data_loading, logger
 
 # Import report generation and data export components
 try:
@@ -23,6 +29,7 @@ except ImportError:
     ReportScheduler = None
     DataExporter = None
 
+@safe_page
 def show_page():
     """Display the data export page"""
     

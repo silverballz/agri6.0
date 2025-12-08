@@ -9,94 +9,164 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
+import sys
+import os
+import rasterio
+from pathlib import Path
+from scipy import stats
 
+# Add src to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+
+from utils.error_handler import safe_page, handle_data_loading, logger
+from database.db_manager import DatabaseManager
+
+@safe_page
 def show_page():
     """Display the temporal analysis page"""
     
     st.title("📈 Temporal Analysis")
     st.markdown("Time series visualization and trend analysis for vegetation indices")
     
-    # Analysis controls
-    display_analysis_controls()
+    # Check if demo mode is active
+    if st.session_state.get('demo_mode', False) and st.session_state.get('demo_data'):
+        show_demo_temporal_analysis()
+        return
     
-    # Main content
-    col1, col2 = st.columns([3, 1])
+    # Initialize database manager
+    if 'db_manager' not in st.session_state:
+        st.session_state.db_manager = DatabaseManager()
     
-    with col1:
-        display_time_series_chart()
-        display_comparison_chart()
+    db_manager = st.session_state.db_manager
     
-    with col2:
-        display_statistics_panel()
-        display_trend_analysis()
+    # Load imagery data
+    try:
+        imagery_list = db_manager.list_processed_imagery(limit=50)
+        
+        if not imagery_list:
+            st.warning("No processed imagery available for temporal analysis. Please process satellite data first.")
+            st.info("Enable **Demo Mode** from the sidebar to explore with sample data.")
+            return
+        
+        # Analysis controls
+        display_analysis_controls(imagery_list)
+        
+        # Load time series data
+        time_series_data = load_time_series_data(imagery_list, db_manager)
+        
+        if time_series_data.empty:
+            st.warning("Unable to load time series data from imagery files.")
+            return
+        
+        # Main content
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            display_time_series_chart(time_series_data)
+            display_comparison_chart(time_series_data)
+        
+        with col2:
+            display_statistics_panel(time_series_data)
+            display_trend_analysis(time_series_data)
+    
+    except Exception as e:
+        logger.error(f"Error in temporal analysis page: {e}")
+        st.error(f"Error loading temporal analysis: {str(e)}")
 
-def display_analysis_controls():
+def load_time_series_data(imagery_list, db_manager):
+    """Load time series data from imagery records"""
+    
+    time_series_data = []
+    
+    for imagery in imagery_list:
+        try:
+            acq_date = datetime.fromisoformat(imagery['acquisition_date'])
+            
+            # Load each vegetation index
+            for index_name in ['NDVI', 'SAVI', 'EVI', 'NDWI', 'NDSI']:
+                index_path_key = f"{index_name.lower()}_path"
+                index_path = imagery.get(index_path_key)
+                
+                if index_path and Path(index_path).exists():
+                    try:
+                        with rasterio.open(index_path) as src:
+                            index_data = src.read(1)
+                            valid_data = index_data[index_data != src.nodata]
+                            
+                            if len(valid_data) > 0:
+                                time_series_data.append({
+                                    'Date': acq_date,
+                                    'Index': index_name,
+                                    'Mean': np.mean(valid_data),
+                                    'Median': np.median(valid_data),
+                                    'Std': np.std(valid_data),
+                                    'Min': np.min(valid_data),
+                                    'Max': np.max(valid_data),
+                                    'P25': np.percentile(valid_data, 25),
+                                    'P75': np.percentile(valid_data, 75)
+                                })
+                    except Exception as e:
+                        logger.warning(f"Error reading {index_name} from {index_path}: {e}")
+        except Exception as e:
+            logger.warning(f"Error processing imagery {imagery.get('id')}: {e}")
+    
+    return pd.DataFrame(time_series_data)
+
+def display_analysis_controls(imagery_list):
     """Display analysis control panel"""
     
     st.subheader("🎛️ Analysis Controls")
     
-    col1, col2, col3, col4 = st.columns(4)
+    # Get date range from imagery
+    dates = [datetime.fromisoformat(img['acquisition_date']) for img in imagery_list]
+    min_date = min(dates) if dates else datetime.now() - timedelta(days=90)
+    max_date = max(dates) if dates else datetime.now()
+    
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        time_period = st.selectbox(
-            "Time Period",
-            ["Last 30 Days", "Last 90 Days", "Last 6 Months", "Last Year", "Custom"],
-            key="temporal_time_period"
-        )
-    
-    with col2:
-        selected_zones = st.multiselect(
-            "Zones to Analyze",
-            ["North Field A", "South Field B", "East Pasture C", "West Orchard D", "Central Plot E"],
-            default=["North Field A", "South Field B"],
-            key="temporal_zones"
-        )
-    
-    with col3:
         selected_indices = st.multiselect(
             "Vegetation Indices",
             ["NDVI", "SAVI", "EVI", "NDWI", "NDSI"],
-            default=["NDVI", "SAVI"],
+            default=["NDVI"],
             key="temporal_indices"
         )
     
-    with col4:
-        aggregation = st.selectbox(
-            "Data Aggregation",
-            ["Daily", "Weekly", "Monthly"],
-            key="temporal_aggregation"
+    with col2:
+        show_confidence = st.checkbox(
+            "Show Confidence Intervals",
+            value=True,
+            key="show_confidence"
         )
     
-    # Custom date range if selected
-    if time_period == "Custom":
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input(
-                "Start Date",
-                value=datetime.now() - timedelta(days=90),
-                key="temporal_start_date"
-            )
-        with col2:
-            end_date = st.date_input(
-                "End Date", 
-                value=datetime.now(),
-                key="temporal_end_date"
-            )
+    with col3:
+        show_anomalies = st.checkbox(
+            "Highlight Anomalies",
+            value=True,
+            key="show_anomalies"
+        )
+    
+    # Display data range info
+    st.info(f"📅 Available data: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')} ({len(imagery_list)} observations)")
 
-def display_time_series_chart():
-    """Display main time series chart"""
+def display_time_series_chart(df):
+    """Display main time series chart with real data"""
     
     st.subheader("📊 Vegetation Index Time Series")
     
-    # Generate mock time series data
-    df = generate_time_series_data()
+    selected_indices = st.session_state.get('temporal_indices', ['NDVI'])
+    show_confidence = st.session_state.get('show_confidence', True)
+    show_anomalies = st.session_state.get('show_anomalies', True)
     
-    # Filter data based on selections
-    selected_zones = st.session_state.get('temporal_zones', ['North Field A', 'South Field B'])
-    selected_indices = st.session_state.get('temporal_indices', ['NDVI', 'SAVI'])
+    if not selected_indices:
+        st.warning("Please select at least one vegetation index.")
+        return
     
-    if not selected_zones or not selected_indices:
-        st.warning("Please select at least one zone and one vegetation index.")
+    # Filter data
+    df_filtered = df[df['Index'].isin(selected_indices)].copy()
+    
+    if df_filtered.empty:
+        st.warning("No data available for selected indices.")
         return
     
     # Create subplot for each index
@@ -111,44 +181,76 @@ def display_time_series_chart():
     colors = px.colors.qualitative.Set1
     
     for i, index in enumerate(selected_indices):
-        for j, zone in enumerate(selected_zones):
-            zone_data = df[(df['Zone'] == zone) & (df['Index'] == index)]
+        index_data = df_filtered[df_filtered['Index'] == index].sort_values('Date')
+        
+        if not index_data.empty:
+            # Main line
+            fig.add_trace(
+                go.Scatter(
+                    x=index_data['Date'],
+                    y=index_data['Mean'],
+                    mode='lines+markers',
+                    name=index,
+                    line=dict(color=colors[i % len(colors)], width=2),
+                    marker=dict(size=6),
+                    showlegend=(i == 0),
+                    hovertemplate=f"<b>{index}</b><br>" +
+                                "Mean: %{y:.3f}<br>" +
+                                "Date: %{x}<br>" +
+                                "<extra></extra>"
+                ),
+                row=i+1, col=1
+            )
             
-            if not zone_data.empty:
+            # Add confidence intervals (using P25 and P75 as bounds)
+            if show_confidence and 'P25' in index_data.columns and 'P75' in index_data.columns:
                 fig.add_trace(
                     go.Scatter(
-                        x=zone_data['Date'],
-                        y=zone_data['Value'],
-                        mode='lines+markers',
-                        name=f"{zone} - {index}",
-                        line=dict(color=colors[j % len(colors)]),
-                        showlegend=(i == 0),  # Only show legend for first subplot
-                        hovertemplate=f"<b>{zone}</b><br>" +
-                                    f"{index}: %{{y:.3f}}<br>" +
-                                    "Date: %{x}<br>" +
-                                    "<extra></extra>"
+                        x=index_data['Date'].tolist() + index_data['Date'].tolist()[::-1],
+                        y=index_data['P75'].tolist() + index_data['P25'].tolist()[::-1],
+                        fill='toself',
+                        fillcolor=colors[i % len(colors)].replace('rgb', 'rgba').replace(')', ', 0.2)'),
+                        line=dict(color='rgba(255,255,255,0)'),
+                        showlegend=False,
+                        hoverinfo="skip",
+                        name=f"{index} CI"
                     ),
                     row=i+1, col=1
                 )
+            
+            # Detect and highlight anomalies
+            if show_anomalies and len(index_data) > 3:
+                # Use z-score to detect anomalies
+                z_scores = np.abs(stats.zscore(index_data['Mean']))
+                anomalies = index_data[z_scores > 2]
                 
-                # Add confidence intervals
-                if 'Upper_CI' in zone_data.columns and 'Lower_CI' in zone_data.columns:
+                if not anomalies.empty:
                     fig.add_trace(
                         go.Scatter(
-                            x=zone_data['Date'].tolist() + zone_data['Date'].tolist()[::-1],
-                            y=zone_data['Upper_CI'].tolist() + zone_data['Lower_CI'].tolist()[::-1],
-                            fill='toself',
-                            fillcolor=colors[j % len(colors)].replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                            line=dict(color='rgba(255,255,255,0)'),
-                            showlegend=False,
-                            hoverinfo="skip"
+                            x=anomalies['Date'],
+                            y=anomalies['Mean'],
+                            mode='markers',
+                            marker=dict(size=12, color='red', symbol='x'),
+                            name='Anomalies',
+                            showlegend=(i == 0),
+                            hovertemplate="<b>Anomaly Detected</b><br>" +
+                                        f"{index}: %{{y:.3f}}<br>" +
+                                        "Date: %{x}<br>" +
+                                        "<extra></extra>"
                         ),
                         row=i+1, col=1
                     )
+            
+            # Add threshold lines for NDVI
+            if index == 'NDVI':
+                fig.add_hline(y=0.7, line_dash="dash", line_color="green", 
+                            annotation_text="Healthy", row=i+1, col=1)
+                fig.add_hline(y=0.5, line_dash="dash", line_color="orange",
+                            annotation_text="Moderate", row=i+1, col=1)
     
     fig.update_layout(
         height=300 * len(selected_indices),
-        title="Vegetation Index Trends with Confidence Intervals",
+        title="Vegetation Index Trends Over Time",
         hovermode='x unified'
     )
     
@@ -159,155 +261,201 @@ def display_time_series_chart():
     
     st.plotly_chart(fig, use_container_width=True)
 
-def display_comparison_chart():
-    """Display zone comparison chart"""
+def display_comparison_chart(df):
+    """Display multi-index comparison chart"""
     
-    st.subheader("🔄 Zone Comparison")
+    st.subheader("🔄 Multi-Index Comparison")
     
-    # Generate comparison data
-    comparison_data = generate_comparison_data()
+    selected_indices = st.session_state.get('temporal_indices', ['NDVI'])
     
-    selected_zones = st.session_state.get('temporal_zones', ['North Field A', 'South Field B'])
-    selected_index = st.selectbox(
-        "Index for Comparison",
-        st.session_state.get('temporal_indices', ['NDVI', 'SAVI']),
-        key="comparison_index"
-    )
-    
-    if not selected_index:
+    if len(selected_indices) < 2:
+        st.info("Select multiple indices to compare them.")
         return
     
     # Filter data
-    filtered_data = comparison_data[
-        (comparison_data['Zone'].isin(selected_zones)) & 
-        (comparison_data['Index'] == selected_index)
-    ]
+    df_filtered = df[df['Index'].isin(selected_indices)].copy()
     
-    if filtered_data.empty:
-        st.warning("No data available for selected zones and index.")
+    if df_filtered.empty:
+        st.warning("No data available for comparison.")
         return
     
     # Create comparison chart
-    fig = px.box(
-        filtered_data,
-        x='Zone',
-        y='Value',
-        color='Zone',
-        title=f"{selected_index} Distribution by Zone (Last 30 Days)",
-        points="all"
-    )
+    fig = go.Figure()
+    
+    colors = px.colors.qualitative.Set1
+    
+    for i, index in enumerate(selected_indices):
+        index_data = df_filtered[df_filtered['Index'] == index].sort_values('Date')
+        
+        if not index_data.empty:
+            fig.add_trace(go.Scatter(
+                x=index_data['Date'],
+                y=index_data['Mean'],
+                mode='lines+markers',
+                name=index,
+                line=dict(color=colors[i % len(colors)], width=2),
+                marker=dict(size=6)
+            ))
     
     fig.update_layout(
+        title="Multi-Index Comparison",
+        xaxis_title="Date",
+        yaxis_title="Index Value",
         height=400,
-        showlegend=False
+        hovermode='x unified'
     )
     
     st.plotly_chart(fig, use_container_width=True)
 
-def display_statistics_panel():
-    """Display statistics panel"""
+def display_statistics_panel(df):
+    """Display statistics panel with real data"""
     
     st.subheader("📊 Statistics")
     
-    # Generate statistics
-    stats = calculate_statistics()
+    selected_indices = st.session_state.get('temporal_indices', ['NDVI'])
     
-    selected_zones = st.session_state.get('temporal_zones', ['North Field A', 'South Field B'])
-    
-    for zone in selected_zones:
-        if zone in stats:
-            st.markdown(f"**{zone}:**")
-            zone_stats = stats[zone]
+    for index in selected_indices:
+        index_data = df[df['Index'] == index]
+        
+        if not index_data.empty:
+            st.markdown(f"**{index}:**")
             
             col1, col2 = st.columns(2)
             
             with col1:
                 st.metric(
-                    "Avg NDVI",
-                    f"{zone_stats['ndvi_mean']:.3f}",
-                    delta=f"{zone_stats['ndvi_change']:+.3f}"
+                    "Mean",
+                    f"{index_data['Mean'].mean():.3f}"
                 )
                 
                 st.metric(
                     "Std Dev",
-                    f"{zone_stats['ndvi_std']:.3f}"
+                    f"{index_data['Mean'].std():.3f}"
                 )
             
             with col2:
-                st.metric(
-                    "Trend",
-                    zone_stats['trend'],
-                    delta=f"{zone_stats['trend_strength']:.1f}%"
-                )
-                
-                st.metric(
-                    "R²",
-                    f"{zone_stats['r_squared']:.3f}"
-                )
+                # Calculate trend
+                if len(index_data) >= 2:
+                    first_val = index_data.iloc[0]['Mean']
+                    last_val = index_data.iloc[-1]['Mean']
+                    change = last_val - first_val
+                    
+                    if change > 0.05:
+                        trend = "Increasing"
+                    elif change < -0.05:
+                        trend = "Decreasing"
+                    else:
+                        trend = "Stable"
+                    
+                    st.metric(
+                        "Trend",
+                        trend,
+                        delta=f"{change:+.3f}"
+                    )
+                    
+                    # Calculate R² for linear trend
+                    if len(index_data) >= 3:
+                        x = np.arange(len(index_data))
+                        y = index_data['Mean'].values
+                        slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+                        
+                        st.metric(
+                            "R²",
+                            f"{r_value**2:.3f}"
+                        )
             
             st.markdown("---")
 
-def display_trend_analysis():
-    """Display trend analysis results"""
+def display_trend_analysis(df):
+    """Display trend analysis results with real data"""
     
     st.subheader("📈 Trend Analysis")
     
-    # Mock trend analysis results
-    trends = {
-        "North Field A": {
-            "direction": "Increasing",
-            "strength": "Moderate",
-            "significance": "p < 0.05",
-            "seasonal": "Yes"
-        },
-        "South Field B": {
-            "direction": "Stable", 
-            "strength": "Weak",
-            "significance": "p > 0.05",
-            "seasonal": "No"
-        },
-        "East Pasture C": {
-            "direction": "Increasing",
-            "strength": "Strong", 
-            "significance": "p < 0.01",
-            "seasonal": "Yes"
-        },
-        "West Orchard D": {
-            "direction": "Decreasing",
-            "strength": "Weak",
-            "significance": "p > 0.05", 
-            "seasonal": "No"
-        },
-        "Central Plot E": {
-            "direction": "Decreasing",
-            "strength": "Strong",
-            "significance": "p < 0.01",
-            "seasonal": "No"
-        }
-    }
+    selected_indices = st.session_state.get('temporal_indices', ['NDVI'])
     
-    selected_zones = st.session_state.get('temporal_zones', ['North Field A', 'South Field B'])
-    
-    for zone in selected_zones:
-        if zone in trends:
-            trend = trends[zone]
+    for index in selected_indices:
+        index_data = df[df['Index'] == index].sort_values('Date')
+        
+        if len(index_data) >= 3:
+            st.markdown(f"**{index}:**")
             
-            # Direction indicator
-            direction_icon = {
-                "Increasing": "📈",
-                "Decreasing": "📉", 
-                "Stable": "➡️"
-            }
+            # Perform linear regression
+            x = np.arange(len(index_data))
+            y = index_data['Mean'].values
+            slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
             
-            st.markdown(f"**{zone}:**")
-            st.markdown(f"{direction_icon[trend['direction']]} {trend['direction']} ({trend['strength']})")
-            st.markdown(f"🔬 {trend['significance']}")
-            st.markdown(f"🌊 Seasonal: {trend['seasonal']}")
+            # Determine direction
+            if slope > 0.001:
+                direction = "Increasing"
+                direction_icon = "📈"
+            elif slope < -0.001:
+                direction = "Decreasing"
+                direction_icon = "📉"
+            else:
+                direction = "Stable"
+                direction_icon = "➡️"
+            
+            # Determine strength based on R²
+            r_squared = r_value ** 2
+            if r_squared > 0.7:
+                strength = "Strong"
+            elif r_squared > 0.4:
+                strength = "Moderate"
+            else:
+                strength = "Weak"
+            
+            # Significance
+            if p_value < 0.01:
+                significance = "p < 0.01 (Highly significant)"
+            elif p_value < 0.05:
+                significance = "p < 0.05 (Significant)"
+            else:
+                significance = "p > 0.05 (Not significant)"
+            
+            st.markdown(f"{direction_icon} {direction} ({strength})")
+            st.markdown(f"📊 Slope: {slope:.6f} per observation")
+            st.markdown(f"🔬 {significance}")
+            st.markdown(f"📉 R² = {r_squared:.3f}")
+            
+            # Detect significant changes
+            if len(index_data) >= 2:
+                first_val = index_data.iloc[0]['Mean']
+                last_val = index_data.iloc[-1]['Mean']
+                total_change = last_val - first_val
+                pct_change = (total_change / first_val * 100) if first_val != 0 else 0
+                
+                st.markdown(f"📊 Total Change: {total_change:+.3f} ({pct_change:+.1f}%)")
+            
             st.markdown("---")
     
     # Export trend analysis
     if st.button("📊 Export Trend Analysis", key="export_trends"):
-        st.success("Trend analysis exported to CSV!")
+        # Create export data
+        export_data = []
+        for index in selected_indices:
+            index_data = df[df['Index'] == index].sort_values('Date')
+            if len(index_data) >= 3:
+                x = np.arange(len(index_data))
+                y = index_data['Mean'].values
+                slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+                
+                export_data.append({
+                    'Index': index,
+                    'Slope': slope,
+                    'R_squared': r_value**2,
+                    'P_value': p_value,
+                    'Observations': len(index_data)
+                })
+        
+        if export_data:
+            export_df = pd.DataFrame(export_data)
+            csv = export_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download CSV",
+                data=csv,
+                file_name=f"trend_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
 
 def generate_time_series_data():
     """Generate mock time series data"""
@@ -459,3 +607,130 @@ def calculate_statistics():
     }
     
     return stats
+
+
+def show_demo_temporal_analysis():
+    """Display temporal analysis page with demo data"""
+    
+    demo_manager = st.session_state.demo_data
+    scenario_name = st.session_state.get('demo_scenario', 'healthy_field')
+    
+    # Get demo data
+    time_series = demo_manager.get_time_series(scenario_name)
+    
+    if not time_series:
+        st.error("Failed to load demo time series data")
+        return
+    
+    st.info(f"**Demo Scenario:** {demo_manager.get_scenario_description(scenario_name)}")
+    
+    # Time series chart
+    st.subheader("📊 NDVI Time Series")
+    
+    dates = [point['date'] for point in time_series]
+    ndvi_values = []
+    for point in time_series:
+        ndvi = point['ndvi']
+        if isinstance(ndvi, np.ndarray):
+            ndvi_values.append(float(np.mean(ndvi)))
+        else:
+            ndvi_values.append(float(ndvi))
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=ndvi_values,
+        mode='lines+markers',
+        name='NDVI',
+        line=dict(color='#66bb6a', width=3),
+        marker=dict(size=10)
+    ))
+    
+    fig.add_hline(y=0.7, line_dash="dash", line_color="green", annotation_text="Healthy")
+    fig.add_hline(y=0.5, line_dash="dash", line_color="orange", annotation_text="Moderate")
+    fig.add_hline(y=0.3, line_dash="dash", line_color="red", annotation_text="Stressed")
+    
+    fig.update_layout(
+        title='NDVI Trend Over Time',
+        xaxis_title="Date",
+        yaxis_title="NDVI Value",
+        height=500
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Statistics
+    st.subheader("📈 Trend Statistics")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Mean NDVI", f"{np.mean(ndvi_values):.3f}")
+    
+    with col2:
+        st.metric("Std Dev", f"{np.std(ndvi_values):.3f}")
+    
+    with col3:
+        trend = "Improving" if ndvi_values[-1] > ndvi_values[0] else "Declining"
+        st.metric("Trend", trend)
+    
+    with col4:
+        change = ndvi_values[-1] - ndvi_values[0]
+        st.metric("Total Change", f"{change:+.3f}")
+    
+    # Multi-index comparison
+    st.subheader("🌿 Multi-Index Comparison")
+    
+    # Create comparison chart with multiple indices
+    fig2 = go.Figure()
+    
+    # NDVI
+    fig2.add_trace(go.Scatter(
+        x=dates,
+        y=ndvi_values,
+        mode='lines+markers',
+        name='NDVI',
+        line=dict(color='#66bb6a', width=2)
+    ))
+    
+    # SAVI (simulated from NDVI)
+    savi_values = [v * 0.9 for v in ndvi_values]
+    fig2.add_trace(go.Scatter(
+        x=dates,
+        y=savi_values,
+        mode='lines+markers',
+        name='SAVI',
+        line=dict(color='#42a5f5', width=2)
+    ))
+    
+    # EVI (simulated from NDVI)
+    evi_values = [v * 1.1 if v < 0.8 else v * 0.95 for v in ndvi_values]
+    fig2.add_trace(go.Scatter(
+        x=dates,
+        y=evi_values,
+        mode='lines+markers',
+        name='EVI',
+        line=dict(color='#ffa726', width=2)
+    ))
+    
+    fig2.update_layout(
+        title='Vegetation Indices Comparison',
+        xaxis_title="Date",
+        yaxis_title="Index Value",
+        height=400
+    )
+    
+    st.plotly_chart(fig2, use_container_width=True)
+    
+    # Insights
+    st.subheader("💡 Key Insights")
+    
+    if ndvi_values[-1] > ndvi_values[0]:
+        st.success("✅ Vegetation health is improving over time")
+    else:
+        st.warning("⚠️ Vegetation health is declining - intervention may be needed")
+    
+    if np.std(ndvi_values) < 0.1:
+        st.info("📊 Stable vegetation conditions with low variability")
+    else:
+        st.warning("📊 High variability detected - monitor closely")
