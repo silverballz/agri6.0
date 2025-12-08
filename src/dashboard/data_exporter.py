@@ -11,15 +11,26 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple, Union
 import pandas as pd
 import numpy as np
-import geopandas as gpd
 from shapely.geometry import Polygon, Point
-import rasterio
-from rasterio.transform import from_bounds
-from rasterio.crs import CRS
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 import logging
+
+# Optional imports for advanced geospatial features
+try:
+    import geopandas as gpd
+    GEOPANDAS_AVAILABLE = True
+except ImportError:
+    GEOPANDAS_AVAILABLE = False
+
+try:
+    import rasterio
+    from rasterio.transform import from_bounds
+    from rasterio.crs import CRS
+    RASTERIO_AVAILABLE = True
+except ImportError:
+    RASTERIO_AVAILABLE = False
 
 # Import data models
 try:

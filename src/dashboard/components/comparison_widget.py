@@ -9,11 +9,17 @@ Part of the USP features for AgriFlux dashboard.
 
 import streamlit as st
 import numpy as np
-import rasterio
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import Tuple, Optional, Dict
 import logging
+
+# Optional import for rasterio (not available on all platforms)
+try:
+    import rasterio
+    RASTERIO_AVAILABLE = True
+except ImportError:
+    RASTERIO_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 

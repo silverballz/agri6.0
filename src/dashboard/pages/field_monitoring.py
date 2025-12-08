@@ -10,10 +10,16 @@ import numpy as np
 from datetime import datetime
 import sys
 import os
-import rasterio
-from rasterio.plot import reshape_as_image
 from pathlib import Path
 import json
+
+# Optional import for rasterio (not available on all platforms)
+try:
+    import rasterio
+    from rasterio.plot import reshape_as_image
+    RASTERIO_AVAILABLE = True
+except ImportError:
+    RASTERIO_AVAILABLE = False
 
 # Add src to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))

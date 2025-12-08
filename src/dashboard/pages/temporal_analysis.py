@@ -11,9 +11,15 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import sys
 import os
-import rasterio
 from pathlib import Path
 from scipy import stats
+
+# Optional import for rasterio (not available on all platforms)
+try:
+    import rasterio
+    RASTERIO_AVAILABLE = True
+except ImportError:
+    RASTERIO_AVAILABLE = False
 
 # Add src to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
