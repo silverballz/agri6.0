@@ -27,7 +27,6 @@ scipy>=1.9.0
 # Utilities
 python-dotenv>=1.0.0
 
-# Note: rasterio, geopandas, fiona require GDAL system libraries
-# These are made optional for cloud deployment
-# For local development with full features, install separately:
-# pip install rasterio geopandas fiona pyproj
+# Geospatial libraries (GDAL installed via packages.txt)
+rasterio>=1.3.0
+GDAL>=3.4.0
