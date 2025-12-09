@@ -65,10 +65,12 @@ secrets/*.yml
 secrets/*.yaml
 !secrets/*.example.*
 
-# Data files (keep test data and demo data)
+# Data files (keep test data, demo data, and processed imagery)
 data/
 !data/test/
 !data/demo/
+!data/processed/
+!data/agriflux.db
 backups/
 
 # Models (keep example models)
