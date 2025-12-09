@@ -51,6 +51,7 @@ logs/
 
 # Database
 *.db
+!data/agriflux.db
 *.sqlite3
 
 # Environment variables

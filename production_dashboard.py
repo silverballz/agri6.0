@@ -204,22 +204,7 @@ st.markdown("""
 if 'selected_zones' not in st.session_state:
     st.session_state.selected_zones = []
 if 'demo_mode' not in st.session_state:
-    # Auto-enable demo mode if no real data is available
-    from database.db_manager import DatabaseManager
-    try:
-        db = DatabaseManager()
-        imagery_list = db.list_processed_imagery(limit=1)
-        st.session_state.demo_mode = len(imagery_list) == 0
-    except:
-        st.session_state.demo_mode = True  # Enable demo mode on any error
-
-# Auto-load demo data if demo mode is enabled
-if 'demo_data' not in st.session_state and st.session_state.demo_mode:
-    from dashboard.demo_manager import DemoManager
-    demo_manager = DemoManager()
-    if demo_manager.is_demo_data_available():
-        if demo_manager.load_demo_data():
-            st.session_state.demo_data = demo_manager
+    st.session_state.demo_mode = False
 
 # Sidebar branding
 st.sidebar.markdown("""
