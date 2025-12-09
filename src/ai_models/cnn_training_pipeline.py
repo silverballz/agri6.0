@@ -16,8 +16,8 @@ import rasterio
 from rasterio.windows import Window
 
 from .spatial_cnn import SpatialCNN, CNNConfig, ImagePatchExtractor
-from ..data_processing.sentinel2_parser import Sentinel2Parser
-from ..data_processing.vegetation_indices import VegetationIndices
+from ..data_processing.sentinel2_parser import Sentinel2SafeParser
+from ..data_processing.vegetation_indices import VegetationIndexCalculator
 from ..database.connection import DatabaseConnection
 
 logger = logging.getLogger(__name__)
@@ -48,8 +48,8 @@ class CNNTrainingPipeline:
         
         self.cnn_model = SpatialCNN(self.config)
         self.patch_extractor = ImagePatchExtractor(patch_size=patch_size)
-        self.sentinel_parser = Sentinel2Parser()
-        self.vegetation_indices = VegetationIndices()
+        self.sentinel_parser = Sentinel2SafeParser()
+        self.vegetation_indices = VegetationIndexCalculator()
         
     def load_satellite_images(self,
                              safe_directories: List[str],

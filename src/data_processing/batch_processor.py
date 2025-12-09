@@ -22,11 +22,11 @@ import json
 import queue
 from abc import ABC, abstractmethod
 
-from .sentinel2_parser import Sentinel2Parser
+from .sentinel2_parser import Sentinel2SafeParser
 from .vegetation_indices import VegetationIndexCalculator
 from .cloud_masking import CloudMaskProcessor
-from ..models.satellite_image import SatelliteImage
-from ..database.connection import DatabaseConnection
+from src.models.satellite_image import SatelliteImage
+from src.database.connection import DatabaseConnection
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +270,6 @@ class SatelliteImageBatchProcessor(BatchProcessor):
     
     def __init__(self, config: BatchConfig = None):
         self.config = config or BatchConfig()
-        self.parser = Sentinel2Parser()
         self.index_calculator = VegetationIndexCalculator()
         self.cloud_processor = CloudMaskProcessor()
         self.memory_optimizer = MemoryOptimizer(self.config.memory_limit_gb)
@@ -280,8 +279,11 @@ class SatelliteImageBatchProcessor(BatchProcessor):
         try:
             logger.info(f"Processing SAFE directory: {safe_path}")
             
+            # Create parser for this SAFE directory
+            parser = Sentinel2SafeParser(Path(safe_path))
+            
             # Parse SAFE directory
-            safe_data = self.parser.parse_safe_directory(safe_path)
+            safe_data = parser.parse_safe_directory()
             
             # Load bands with memory optimization
             bands = {}
@@ -290,7 +292,7 @@ class SatelliteImageBatchProcessor(BatchProcessor):
                     band_path = safe_data.band_files[band_name]
                     
                     # Load band in chunks if it's large
-                    band_data = self.parser.read_band_file(band_path)
+                    band_data = parser.read_band_file(band_path)
                     
                     # Optimize memory usage
                     if band_data.nbytes > self.config.chunk_size_mb * (1024**2):
@@ -317,7 +319,7 @@ class SatelliteImageBatchProcessor(BatchProcessor):
             
             # Apply cloud masking if SCL is available
             if 'SCL' in safe_data.band_files:
-                scl_data = self.parser.read_band_file(safe_data.band_files['SCL'])
+                scl_data = parser.read_band_file(safe_data.band_files['SCL'])
                 cloud_mask = self.cloud_processor.create_cloud_mask(scl_data)
                 
                 # Apply mask to indices

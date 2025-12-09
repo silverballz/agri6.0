@@ -71,6 +71,9 @@ def show_page():
     # Quick stats row
     display_quick_stats(latest_imagery, active_alerts, db_stats)
     
+    # Real Data Pipeline Status Banner
+    display_real_data_pipeline_status(db_stats)
+    
     # Main content in columns
     col1, col2 = st.columns([2, 1])
     
@@ -88,6 +91,121 @@ def show_page():
     
     # Bottom section - zone comparison
     display_zone_comparison()
+
+def display_real_data_pipeline_status(db_stats):
+    """Display real data pipeline status banner"""
+    
+    # Check if we have real data
+    real_imagery_count = db_stats.get('real_imagery_count', 0)
+    synthetic_imagery_count = db_stats.get('synthetic_imagery_count', 0)
+    total_imagery = db_stats.get('imagery_count', 0)
+    
+    # Check if AI models are enabled
+    use_ai_models = os.getenv('USE_AI_MODELS', 'false').lower() == 'true'
+    
+    # Check if real-trained models exist
+    cnn_model_path = Path('models/crop_health_cnn_real.pth')
+    lstm_model_path = Path('models/crop_health_lstm_real.pth')
+    has_real_models = cnn_model_path.exists() and lstm_model_path.exists()
+    
+    # Determine status
+    if real_imagery_count > 0 and has_real_models and use_ai_models:
+        status_color = "success"
+        status_icon = "✅"
+        status_text = "Real Data Pipeline Active"
+        status_message = f"Using {real_imagery_count} real satellite imagery records and AI models trained on actual data"
+    elif real_imagery_count > 0:
+        status_color = "info"
+        status_icon = "🛰️"
+        status_text = "Real Data Available"
+        status_message = f"{real_imagery_count} real imagery records available. Train AI models to enable predictions."
+    elif synthetic_imagery_count > 0:
+        status_color = "warning"
+        status_icon = "⚠️"
+        status_text = "Using Synthetic Data"
+        status_message = f"Currently using {synthetic_imagery_count} synthetic records. Download real data for production use."
+    else:
+        status_color = "info"
+        status_icon = "📥"
+        status_text = "No Data Available"
+        status_message = "Download real satellite data to get started."
+    
+    # Display banner
+    if status_color == "success":
+        st.success(f"{status_icon} **{status_text}** - {status_message}")
+    elif status_color == "warning":
+        st.warning(f"{status_icon} **{status_text}** - {status_message}")
+    else:
+        st.info(f"{status_icon} **{status_text}** - {status_message}")
+    
+    # Show quick action buttons
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if st.button("📚 View Documentation"):
+            st.info("Navigate to **📚 Documentation** page from the sidebar for complete guides.")
+    
+    with col2:
+        if real_imagery_count == 0:
+            if st.button("📥 Download Real Data"):
+                st.code("""
+# Download real satellite data
+python scripts/download_real_satellite_data.py --target-count 20
+
+# Validate data quality
+python scripts/validate_data_quality.py
+                """, language="bash")
+    
+    with col3:
+        if real_imagery_count > 0 and not has_real_models:
+            if st.button("🤖 Train AI Models"):
+                st.code("""
+# Prepare training data
+python scripts/prepare_real_training_data.py
+python scripts/prepare_lstm_training_data.py
+
+# Train models
+python scripts/train_cnn_on_real_data.py --epochs 50
+python scripts/train_lstm_on_real_data.py --epochs 100
+                """, language="bash")
+    
+    with col4:
+        if has_real_models and not use_ai_models:
+            if st.button("🚀 Enable AI Models"):
+                st.code("""
+# Enable AI predictions in .env
+echo "USE_AI_MODELS=true" >> .env
+
+# Restart dashboard
+streamlit run production_dashboard.py
+                """, language="bash")
+    
+    # Show detailed stats in expander
+    with st.expander("📊 **Pipeline Status Details**", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("### 📥 Data Status")
+            st.metric("Real Imagery", real_imagery_count)
+            st.metric("Synthetic Imagery", synthetic_imagery_count)
+            st.metric("Total Records", total_imagery)
+        
+        with col2:
+            st.markdown("### 🤖 AI Models")
+            st.metric("CNN Model", "✅ Available" if cnn_model_path.exists() else "❌ Not Found")
+            st.metric("LSTM Model", "✅ Available" if lstm_model_path.exists() else "❌ Not Found")
+            st.metric("AI Predictions", "✅ Enabled" if use_ai_models else "❌ Disabled")
+        
+        with col3:
+            st.markdown("### 📚 Resources")
+            st.markdown("""
+            - [Pipeline Guide](../docs/REAL_DATA_PIPELINE_GUIDE.md)
+            - [Quick Reference](../docs/REAL_DATA_QUICK_REFERENCE.md)
+            - [Troubleshooting](../docs/API_TROUBLESHOOTING_GUIDE.md)
+            - [Scripts Docs](../scripts/README_REAL_DATA_PIPELINE.md)
+            """)
+    
+    st.markdown("---")
 
 def display_quick_stats(latest_imagery, active_alerts, db_stats):
     """Display quick statistics cards with real data"""
@@ -939,22 +1057,22 @@ def display_zone_comparison():
     
     df = pd.DataFrame(comparison_data)
     
-    # Style the dataframe
+    # Style the dataframe - Green agricultural theme
     def style_health_status(val):
         if val == 'Excellent':
-            return 'background-color: #c8e6c9'
+            return 'background: linear-gradient(135deg, rgba(76, 175, 80, 0.25) 0%, rgba(102, 187, 106, 0.25) 100%); color: #66bb6a; font-weight: bold; border-left: 3px solid #4caf50'
         elif val == 'Healthy':
-            return 'background-color: #e8f5e8'
+            return 'background: rgba(76, 175, 80, 0.15); color: #81c784; font-weight: 600'
         elif val == 'Stressed':
-            return 'background-color: #ffcdd2'
-        return ''
+            return 'background: linear-gradient(135deg, rgba(239, 83, 80, 0.25) 0%, rgba(229, 57, 53, 0.25) 100%); color: #ef5350; font-weight: bold; border-left: 3px solid #ef5350'
+        return 'color: #e8f5e9'
     
     def style_alerts(val):
         if val > 1:
-            return 'background-color: #ffcdd2; font-weight: bold'
+            return 'background: rgba(239, 83, 80, 0.25); color: #ef5350; font-weight: bold'
         elif val == 1:
-            return 'background-color: #fff3e0'
-        return 'background-color: #e8f5e8'
+            return 'background: rgba(255, 167, 38, 0.25); color: #ffa726; font-weight: 600'
+        return 'background: rgba(76, 175, 80, 0.15); color: #66bb6a'
     
     styled_df = df.style.applymap(style_health_status, subset=['Health Status']) \
                        .applymap(style_alerts, subset=['Active Alerts']) \

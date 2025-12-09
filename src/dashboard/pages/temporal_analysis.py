@@ -31,6 +31,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from utils.error_handler import safe_page, handle_data_loading, logger
 from database.db_manager import DatabaseManager
+from data_processing.trend_analyzer import TrendAnalyzer
 
 @safe_page
 def show_page():
@@ -75,6 +76,15 @@ def show_page():
         with col1:
             display_time_series_chart(time_series_data)
             display_comparison_chart(time_series_data)
+            
+            # Add seasonal decomposition
+            display_seasonal_decomposition(time_series_data)
+            
+            # Add rate of change visualization
+            display_rate_of_change(time_series_data)
+            
+            # Add day-wise comparison section
+            display_day_wise_comparison(time_series_data, imagery_list)
         
         with col2:
             display_statistics_panel(time_series_data)
@@ -165,6 +175,31 @@ def display_time_series_chart(df):
     
     st.subheader("📊 Vegetation Index Time Series")
     
+    # Add contextual explanation section
+    with st.expander("📖 What does this graph show?", expanded=False):
+        st.markdown("""
+        **Understanding Your Vegetation Time Series:**
+        
+        This chart shows how your vegetation health has changed over time using satellite-derived indices:
+        
+        - **Line**: Shows the average vegetation index value for each date
+        - **Shaded Area**: Represents the confidence interval (25th to 75th percentile) - wider bands indicate more variability across your field
+        - **Red X Markers**: Highlight anomalies - unusual values that deviate significantly from the normal pattern
+        - **Threshold Lines** (NDVI only):
+          - Green dashed line (0.7): Healthy vegetation
+          - Orange dashed line (0.5): Moderate vegetation health
+        
+        **How to interpret trends:**
+        - **Upward trend**: Vegetation is improving (good growth, adequate water/nutrients)
+        - **Downward trend**: Vegetation is declining (may need intervention)
+        - **Stable trend**: Vegetation health is consistent
+        
+        **What to look for:**
+        - Sudden drops may indicate stress, disease, or pest damage
+        - Gradual increases suggest successful management practices
+        - High variability (wide shaded areas) may indicate uneven field conditions
+        """)
+    
     selected_indices = st.session_state.get('temporal_indices', ['NDVI'])
     show_confidence = st.session_state.get('show_confidence', True)
     show_anomalies = st.session_state.get('show_anomalies', True)
@@ -229,17 +264,21 @@ def display_time_series_chart(df):
                     row=i+1, col=1
                 )
             
-            # Detect and highlight anomalies
+            # Detect and highlight anomalies using TrendAnalyzer
             if show_anomalies and len(index_data) > 3:
-                # Use z-score to detect anomalies
-                z_scores = np.abs(stats.zscore(index_data['Mean']))
-                anomalies = index_data[z_scores > 2]
+                analyzer = TrendAnalyzer()
+                time_series = index_data['Mean']
+                dates_series = pd.DatetimeIndex(index_data['Date'])
                 
-                if not anomalies.empty:
+                anomaly_results = analyzer.detect_anomalies(time_series, dates_series, threshold_std=2.0)
+                
+                if anomaly_results['count'] > 0:
+                    anomaly_indices = index_data[anomaly_results['anomalies']]
+                    
                     fig.add_trace(
                         go.Scatter(
-                            x=anomalies['Date'],
-                            y=anomalies['Mean'],
+                            x=anomaly_indices['Date'],
+                            y=anomaly_indices['Mean'],
                             mode='markers',
                             marker=dict(size=12, color='red', symbol='x'),
                             name='Anomalies',
@@ -271,6 +310,155 @@ def display_time_series_chart(df):
         fig.update_yaxes(title_text="Index Value", row=i+1, col=1)
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Display anomaly alerts if enabled
+    if show_anomalies:
+        display_anomaly_alerts(df_filtered, selected_indices)
+    
+    # Add trend interpretation using TrendAnalyzer
+    display_trend_interpretation(df_filtered, selected_indices)
+
+def display_anomaly_alerts(df, selected_indices):
+    """Display anomaly alerts with user-friendly descriptions"""
+    
+    analyzer = TrendAnalyzer()
+    all_anomalies = []
+    
+    # Detect anomalies for each index
+    for index in selected_indices:
+        index_data = df[df['Index'] == index].sort_values('Date')
+        
+        if len(index_data) >= 3:
+            time_series = index_data['Mean']
+            dates_series = pd.DatetimeIndex(index_data['Date'])
+            
+            anomaly_results = analyzer.detect_anomalies(time_series, dates_series, threshold_std=2.0)
+            
+            if anomaly_results['count'] > 0:
+                for desc in anomaly_results['descriptions']:
+                    all_anomalies.append({
+                        'index': index,
+                        'date': desc['date'],
+                        'value': desc['value'],
+                        'z_score': desc['z_score'],
+                        'description': desc['description'],
+                        'direction': desc['direction']
+                    })
+    
+    # Display anomalies if any found
+    if all_anomalies:
+        st.markdown("### 🚨 Anomalies Detected")
+        
+        st.warning(f"**{len(all_anomalies)} anomal{'y' if len(all_anomalies) == 1 else 'ies'} detected** - unusual values that deviate significantly from normal patterns.")
+        
+        # Display each anomaly
+        for anomaly in all_anomalies:
+            with st.expander(
+                f"⚠️ {anomaly['index']} - {anomaly['date'].strftime('%b %d, %Y')} ({anomaly['direction']})",
+                expanded=False
+            ):
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    st.markdown(f"**Description:**")
+                    st.info(anomaly['description'])
+                
+                with col2:
+                    st.metric(
+                        "Value",
+                        f"{anomaly['value']:.3f}",
+                        help=f"Deviation: {anomaly['z_score']:.1f}σ from mean"
+                    )
+                    
+                    st.metric(
+                        "Severity",
+                        f"{anomaly['z_score']:.1f}σ",
+                        help="Number of standard deviations from normal"
+                    )
+        
+        st.markdown("---")
+
+def display_trend_interpretation(df, selected_indices):
+    """Display plain-language trend interpretation using TrendAnalyzer"""
+    
+    st.subheader("📈 Trend Interpretation")
+    
+    analyzer = TrendAnalyzer()
+    
+    for index in selected_indices:
+        index_data = df[df['Index'] == index].sort_values('Date')
+        
+        if len(index_data) >= 2:
+            try:
+                # Perform regression analysis
+                time_series = index_data['Mean']
+                
+                # Check for NaN values
+                if time_series.isna().all():
+                    st.warning(f"No valid data available for {index} trend analysis.")
+                    continue
+                
+                trend_results = analyzer.fit_regression(time_series, index_name=index)
+            except Exception as e:
+                logger.error(f"Error analyzing trend for {index}: {e}")
+                st.error(f"Error loading temporal analysis for {index}: {str(e)}")
+                continue
+            
+            # Display results in an info box
+            st.markdown(f"**{index}:**")
+            
+            # Main explanation
+            st.info(f"📊 {trend_results['explanation']}")
+            
+            # Recommendation box
+            if "⚠️" in trend_results['recommendation']:
+                st.warning(f"💡 **Recommendation:** {trend_results['recommendation']}")
+            else:
+                st.success(f"💡 **Recommendation:** {trend_results['recommendation']}")
+            
+            # Detailed metrics in columns
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "Weekly Change",
+                    f"{trend_results['weekly_change_pct']:+.1f}%",
+                    help="Average percentage change per week"
+                )
+            
+            with col2:
+                st.metric(
+                    "Monthly Change",
+                    f"{trend_results['monthly_change_pct']:+.1f}%",
+                    help="Average percentage change per month"
+                )
+            
+            with col3:
+                st.metric(
+                    "Trend Strength (R²)",
+                    f"{trend_results['r_squared']:.3f}",
+                    help="How well the trend line fits the data (0-1, higher is stronger)"
+                )
+            
+            with col4:
+                # Determine trend direction
+                if trend_results['weekly_change_pct'] > 0.5:
+                    trend_icon = "📈"
+                    trend_label = "Improving"
+                elif trend_results['weekly_change_pct'] < -0.5:
+                    trend_icon = "📉"
+                    trend_label = "Declining"
+                else:
+                    trend_icon = "➡️"
+                    trend_label = "Stable"
+                
+                st.metric(
+                    "Trend Direction",
+                    f"{trend_icon} {trend_label}",
+                    help="Overall direction of vegetation health"
+                )
+            
+            st.markdown("---")
 
 def display_comparison_chart(df):
     """Display multi-index comparison chart"""
@@ -314,6 +502,510 @@ def display_comparison_chart(df):
         yaxis_title="Index Value",
         height=400,
         hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+def display_seasonal_decomposition(df):
+    """Display seasonal decomposition with explanations"""
+    
+    st.subheader("🔄 Seasonal Decomposition")
+    
+    # Add explanation
+    with st.expander("📖 What is seasonal decomposition?", expanded=False):
+        st.markdown("""
+        **Understanding Seasonal Decomposition:**
+        
+        This analysis breaks down your vegetation time series into three components:
+        
+        1. **Trend**: The long-term direction (increasing, decreasing, or stable) after removing seasonal patterns
+        2. **Seasonal**: Repeating patterns that occur at regular intervals (e.g., monsoon cycles, winter dormancy)
+        3. **Residual**: Random variations that can't be explained by trend or seasonality
+        
+        **Why is this useful?**
+        - Helps separate long-term changes from expected seasonal variations
+        - Identifies unusual events (large residuals)
+        - Predicts future patterns based on historical seasonality
+        """)
+    
+    # Select index for decomposition
+    selected_index = st.selectbox(
+        "Select vegetation index for decomposition:",
+        ['NDVI', 'SAVI', 'EVI', 'NDWI'],
+        key="seasonal_decomp_index"
+    )
+    
+    # Filter data for selected index
+    index_data = df[df['Index'] == selected_index].sort_values('Date')
+    
+    if len(index_data) < 14:  # Need at least 2 weeks of data
+        st.info(f"Need at least 14 observations for seasonal decomposition. Currently have {len(index_data)} observations.")
+        return
+    
+    # Perform decomposition
+    analyzer = TrendAnalyzer()
+    time_series = index_data.set_index('Date')['Mean']
+    
+    # Use a period based on available data (weekly pattern if enough data)
+    period = min(7, len(time_series) // 2)
+    
+    decomp_results = analyzer.decompose_seasonal(time_series, period=period)
+    
+    if decomp_results is None:
+        st.warning("Seasonal decomposition requires statsmodels library. Install with: pip install statsmodels")
+        return
+    
+    # Create subplots for each component
+    fig = make_subplots(
+        rows=4,
+        cols=1,
+        subplot_titles=[
+            f"Original {selected_index} Time Series",
+            "Trend Component",
+            "Seasonal Component",
+            "Residual Component"
+        ],
+        vertical_spacing=0.08,
+        shared_xaxes=True
+    )
+    
+    # Original data
+    fig.add_trace(
+        go.Scatter(
+            x=time_series.index,
+            y=time_series.values,
+            mode='lines+markers',
+            name='Original',
+            line=dict(color='#1f77b4', width=2)
+        ),
+        row=1, col=1
+    )
+    
+    # Trend
+    fig.add_trace(
+        go.Scatter(
+            x=decomp_results['trend'].index,
+            y=decomp_results['trend'].values,
+            mode='lines',
+            name='Trend',
+            line=dict(color='#ff7f0e', width=2)
+        ),
+        row=2, col=1
+    )
+    
+    # Seasonal
+    fig.add_trace(
+        go.Scatter(
+            x=decomp_results['seasonal'].index,
+            y=decomp_results['seasonal'].values,
+            mode='lines',
+            name='Seasonal',
+            line=dict(color='#2ca02c', width=2)
+        ),
+        row=3, col=1
+    )
+    
+    # Residual
+    fig.add_trace(
+        go.Scatter(
+            x=decomp_results['residual'].index,
+            y=decomp_results['residual'].values,
+            mode='markers',
+            name='Residual',
+            marker=dict(color='#d62728', size=4)
+        ),
+        row=4, col=1
+    )
+    
+    fig.update_layout(
+        height=1000,
+        showlegend=False,
+        title=f"Seasonal Decomposition of {selected_index}"
+    )
+    
+    fig.update_xaxes(title_text="Date", row=4, col=1)
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Display explanations for each component
+    st.markdown("### 💡 Component Explanations")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**📈 Trend**")
+        st.info(decomp_results['explanations']['trend'])
+        st.metric(
+            "Direction",
+            decomp_results['trend_direction'].capitalize(),
+            help="Overall long-term direction"
+        )
+    
+    with col2:
+        st.markdown("**🔄 Seasonal**")
+        st.info(decomp_results['explanations']['seasonal'])
+        st.metric(
+            "Amplitude",
+            f"{decomp_results['seasonal_amplitude']:.3f}",
+            help="Strength of seasonal variation"
+        )
+    
+    with col3:
+        st.markdown("**📊 Residual**")
+        st.info(decomp_results['explanations']['residual'])
+        residual_std = decomp_results['residual'].std()
+        st.metric(
+            "Std Dev",
+            f"{residual_std:.3f}",
+            help="Variability of unexplained factors"
+        )
+    
+    st.markdown("---")
+
+def display_rate_of_change(df):
+    """Display rate of change visualization with historical comparison"""
+    
+    st.subheader("📊 Rate of Change Analysis")
+    
+    # Add explanation
+    with st.expander("📖 What is rate of change?", expanded=False):
+        st.markdown("""
+        **Understanding Rate of Change:**
+        
+        Rate of change shows how quickly your vegetation health is improving or declining:
+        
+        - **Positive values** (green): Vegetation is growing/improving
+        - **Negative values** (red): Vegetation is declining
+        - **Near zero** (yellow): Vegetation is stable
+        
+        **Historical comparison:**
+        - Compares current growth rates to your field's historical average
+        - Highlights periods of unusually rapid growth or decline
+        - Helps identify when intervention may be needed
+        """)
+    
+    # Select index for rate analysis
+    selected_index = st.selectbox(
+        "Select vegetation index for rate analysis:",
+        ['NDVI', 'SAVI', 'EVI', 'NDWI'],
+        key="rate_change_index"
+    )
+    
+    # Filter data for selected index
+    index_data = df[df['Index'] == selected_index].sort_values('Date')
+    
+    if len(index_data) < 8:  # Need at least 8 observations for 7-day window
+        st.info(f"Need at least 8 observations for rate of change analysis. Currently have {len(index_data)} observations.")
+        return
+    
+    # Calculate rate of change
+    analyzer = TrendAnalyzer()
+    time_series = index_data['Mean']
+    dates_series = pd.DatetimeIndex(index_data['Date'])
+    
+    rate_results = analyzer.calculate_rate_of_change(time_series, dates_series, window=7)
+    
+    # Create visualization
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        subplot_titles=[
+            f"{selected_index} Rate of Change (% per week)",
+            "Growth vs Decline Periods"
+        ],
+        vertical_spacing=0.15,
+        row_heights=[0.6, 0.4]
+    )
+    
+    # Rate of change line chart
+    colors = ['green' if r > 0 else 'red' if r < 0 else 'gray' 
+              for r in rate_results['rate_pct_weekly']]
+    
+    fig.add_trace(
+        go.Scatter(
+            x=dates_series,
+            y=rate_results['rate_pct_weekly'],
+            mode='lines+markers',
+            name='Rate of Change',
+            line=dict(color='#1f77b4', width=2),
+            marker=dict(size=6, color=colors),
+            hovertemplate="<b>Date:</b> %{x}<br>" +
+                         "<b>Rate:</b> %{y:.2f}% per week<br>" +
+                         "<extra></extra>"
+        ),
+        row=1, col=1
+    )
+    
+    # Add historical average line
+    fig.add_hline(
+        y=rate_results['historical_avg_rate'] * 100 / time_series.mean() if time_series.mean() != 0 else 0,
+        line_dash="dash",
+        line_color="orange",
+        annotation_text="Historical Average",
+        row=1, col=1
+    )
+    
+    # Add zero line
+    fig.add_hline(
+        y=0,
+        line_dash="dot",
+        line_color="gray",
+        row=1, col=1
+    )
+    
+    # Growth/decline periods bar chart
+    growth_decline = []
+    for i, (growth, decline) in enumerate(zip(rate_results['growth_periods'], rate_results['decline_periods'])):
+        if growth:
+            growth_decline.append(1)
+        elif decline:
+            growth_decline.append(-1)
+        else:
+            growth_decline.append(0)
+    
+    fig.add_trace(
+        go.Bar(
+            x=dates_series,
+            y=growth_decline,
+            marker=dict(
+                color=['green' if v > 0 else 'red' if v < 0 else 'gray' for v in growth_decline]
+            ),
+            name='Period Type',
+            hovertemplate="<b>Date:</b> %{x}<br>" +
+                         "<b>Period:</b> %{text}<br>" +
+                         "<extra></extra>",
+            text=['Growth' if v > 0 else 'Decline' if v < 0 else 'Stable' for v in growth_decline]
+        ),
+        row=2, col=1
+    )
+    
+    fig.update_layout(
+        height=700,
+        showlegend=False
+    )
+    
+    fig.update_xaxes(title_text="Date", row=2, col=1)
+    fig.update_yaxes(title_text="% Change per Week", row=1, col=1)
+    fig.update_yaxes(title_text="Period Type", row=2, col=1, tickvals=[-1, 0, 1], ticktext=['Decline', 'Stable', 'Growth'])
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Display metrics
+    st.markdown("### 📈 Rate Metrics")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        current_rate = rate_results['rate_pct_weekly'].iloc[-1] if len(rate_results['rate_pct_weekly']) > 0 else 0
+        st.metric(
+            "Current Rate",
+            f"{current_rate:+.2f}% /week",
+            help="Most recent rate of change"
+        )
+    
+    with col2:
+        avg_growth = rate_results['avg_growth_rate'] * 100 / time_series.mean() if time_series.mean() != 0 else 0
+        st.metric(
+            "Avg Growth Rate",
+            f"{avg_growth:+.2f}% /week",
+            help="Average rate during growth periods"
+        )
+    
+    with col3:
+        avg_decline = rate_results['avg_decline_rate'] * 100 / time_series.mean() if time_series.mean() != 0 else 0
+        st.metric(
+            "Avg Decline Rate",
+            f"{avg_decline:+.2f}% /week",
+            help="Average rate during decline periods"
+        )
+    
+    with col4:
+        hist_avg = rate_results['historical_avg_rate'] * 100 / time_series.mean() if time_series.mean() != 0 else 0
+        st.metric(
+            "Historical Avg",
+            f"{hist_avg:+.2f}% /week",
+            help="Overall historical average rate"
+        )
+    
+    # Display significant changes
+    if rate_results['significant_changes']:
+        st.markdown("### ⚡ Significant Rate Changes")
+        st.warning(f"**{len(rate_results['significant_changes'])} significant deviation(s)** detected (>2σ from historical average)")
+        
+        for change in rate_results['significant_changes']:
+            with st.expander(f"📅 {change['date'].strftime('%b %d, %Y')}", expanded=False):
+                st.info(change['description'])
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Rate", f"{change['rate_pct_weekly']:+.2f}% /week")
+                with col2:
+                    comparison = change['rate_pct_weekly'] / hist_avg if hist_avg != 0 else 0
+                    st.metric("vs Historical", f"{comparison:.1f}x")
+    
+    st.markdown("---")
+
+def display_day_wise_comparison(df, imagery_list):
+    """Display day-wise comparison dashboard"""
+    
+    st.subheader("📅 Day-by-Day Comparison")
+    
+    # Get unique dates
+    dates = sorted(df['Date'].unique())
+    
+    if len(dates) < 2:
+        st.info("Need at least 2 dates for comparison. More satellite imagery will enable this feature.")
+        return
+    
+    # Date pickers for comparison
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        date1 = st.selectbox(
+            "Select First Date:",
+            dates,
+            index=0,
+            format_func=lambda x: x.strftime('%b %d, %Y'),
+            key="day_wise_date1"
+        )
+    
+    with col2:
+        date2 = st.selectbox(
+            "Select Second Date:",
+            dates,
+            index=len(dates)-1,
+            format_func=lambda x: x.strftime('%b %d, %Y'),
+            key="day_wise_date2"
+        )
+    
+    if date1 == date2:
+        st.warning("Please select two different dates for comparison.")
+        return
+    
+    # Display side-by-side comparison
+    st.markdown("### 📊 Vegetation Index Comparison")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    # Get data for both dates
+    data1 = df[df['Date'] == date1]
+    data2 = df[df['Date'] == date2]
+    
+    # Compare each index
+    analyzer = TrendAnalyzer()
+    
+    for index in ['NDVI', 'SAVI', 'EVI', 'NDWI']:
+        index_data1 = data1[data1['Index'] == index]
+        index_data2 = data2[data2['Index'] == index]
+        
+        if not index_data1.empty and not index_data2.empty:
+            val1 = index_data1['Mean'].values[0]
+            val2 = index_data2['Mean'].values[0]
+            delta = val2 - val1
+            pct_change = (delta / val1 * 100) if val1 != 0 else 0
+            
+            # Interpret the change
+            interpretation = analyzer._interpret_change(index, delta, pct_change)
+            
+            with col1:
+                st.metric(
+                    f"{index}",
+                    f"{val2:.3f}",
+                    delta=f"{delta:+.3f} ({pct_change:+.1f}%)",
+                    help=f"Change from {date1.strftime('%b %d')} to {date2.strftime('%b %d')}"
+                )
+            
+            with col2:
+                # Show interpretation with appropriate icon
+                if "improvement" in interpretation.lower():
+                    st.success(f"✅ {interpretation}")
+                elif "decline" in interpretation.lower():
+                    st.warning(f"⚠️ {interpretation}")
+                else:
+                    st.info(f"ℹ️ {interpretation}")
+            
+            with col3:
+                # Show health status
+                if val2 >= 0.7:
+                    st.success("🟢 Healthy")
+                elif val2 >= 0.5:
+                    st.warning("🟡 Moderate")
+                elif val2 >= 0.3:
+                    st.warning("🟠 Stressed")
+                else:
+                    st.error("🔴 Critical")
+    
+    # Add calendar heatmap
+    st.markdown("### 📅 Vegetation Health Calendar")
+    display_calendar_heatmap(df)
+    
+    # Add date slider for quick navigation
+    st.markdown("### 🎚️ Quick Date Navigation")
+    
+    selected_date_idx = st.slider(
+        "Slide to navigate through dates:",
+        min_value=0,
+        max_value=len(dates) - 1,
+        value=len(dates) - 1,
+        format="Date %d of " + str(len(dates)),
+        key="date_slider"
+    )
+    
+    selected_date = dates[selected_date_idx]
+    st.info(f"📅 Viewing: **{selected_date.strftime('%B %d, %Y')}** ({selected_date_idx + 1} of {len(dates)})")
+    
+    # Display metrics for selected date
+    selected_data = df[df['Date'] == selected_date]
+    
+    if not selected_data.empty:
+        cols = st.columns(4)
+        for i, index in enumerate(['NDVI', 'SAVI', 'EVI', 'NDWI']):
+            index_data = selected_data[selected_data['Index'] == index]
+            if not index_data.empty:
+                with cols[i]:
+                    st.metric(
+                        index,
+                        f"{index_data['Mean'].values[0]:.3f}",
+                        help=f"{index} value on {selected_date.strftime('%b %d, %Y')}"
+                    )
+
+def display_calendar_heatmap(df):
+    """Create calendar heatmap showing vegetation health over time"""
+    
+    # Filter for NDVI only
+    ndvi_data = df[df['Index'] == 'NDVI'].sort_values('Date')
+    
+    if ndvi_data.empty:
+        st.warning("No NDVI data available for calendar heatmap.")
+        return
+    
+    # Create heatmap
+    fig = go.Figure(data=go.Heatmap(
+        x=ndvi_data['Date'],
+        y=['NDVI'],
+        z=[ndvi_data['Mean'].values],
+        colorscale=[
+            [0, '#d32f2f'],      # Critical (red)
+            [0.3, '#ff9800'],    # Stressed (orange)
+            [0.5, '#ffd54f'],    # Moderate (yellow)
+            [0.7, '#66bb6a'],    # Healthy (light green)
+            [1, '#2e7d32']       # Excellent (dark green)
+        ],
+        colorbar=dict(
+            title="Health",
+            tickvals=[0.3, 0.5, 0.7, 0.9],
+            ticktext=['Critical', 'Stressed', 'Moderate', 'Healthy']
+        ),
+        hovertemplate="<b>Date:</b> %{x}<br>" +
+                     "<b>NDVI:</b> %{z:.3f}<br>" +
+                     "<extra></extra>"
+    ))
+    
+    fig.update_layout(
+        title="NDVI Health Calendar",
+        xaxis_title="Date",
+        height=200,
+        yaxis=dict(showticklabels=False)
     )
     
     st.plotly_chart(fig, use_container_width=True)

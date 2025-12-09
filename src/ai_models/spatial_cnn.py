@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CNNConfig:
     """Configuration for CNN model."""
-    input_shape: Tuple[int, int, int] = (64, 64, 6)  # Height, Width, Channels (B02,B03,B04,B08,B11,B12)
+    input_shape: Tuple[int, int, int] = (64, 64, 4)  # Height, Width, Channels (B02,B03,B04,B08)
     num_classes: int = 4  # healthy, stressed, diseased, pest_damage
     conv_filters: List[int] = None
     conv_kernel_size: int = 3

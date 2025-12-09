@@ -13,7 +13,7 @@ import sqlite3
 import json
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from contextlib import contextmanager
 
@@ -88,9 +88,21 @@ class DatabaseManager:
                     ndsi_path TEXT,
                     metadata_json TEXT,
                     processed_at TEXT NOT NULL,
+                    synthetic INTEGER DEFAULT 1,
                     UNIQUE(tile_id, acquisition_date)
                 )
             """)
+            
+            # Add synthetic column to existing tables (migration)
+            try:
+                cursor.execute("""
+                    ALTER TABLE processed_imagery 
+                    ADD COLUMN synthetic INTEGER DEFAULT 1
+                """)
+                logger.info("Added synthetic column to processed_imagery table")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
             
             # Table 2: alerts
             cursor.execute("""
@@ -135,6 +147,11 @@ class DatabaseManager:
             """)
             
             cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_imagery_synthetic 
+                ON processed_imagery(synthetic)
+            """)
+            
+            cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_alerts_imagery 
                 ON alerts(imagery_id)
             """)
@@ -164,7 +181,8 @@ class DatabaseManager:
                               tile_id: str,
                               cloud_coverage: float,
                               geotiff_paths: Dict[str, str],
-                              metadata: Dict[str, Any]) -> int:
+                              metadata: Dict[str, Any],
+                              synthetic: bool = True) -> int:
         """
         Save processed imagery record to database.
         
@@ -174,6 +192,7 @@ class DatabaseManager:
             cloud_coverage: Cloud coverage percentage
             geotiff_paths: Dictionary mapping index names to file paths
             metadata: Additional metadata dictionary
+            synthetic: Whether this is synthetic data (default True for backward compatibility)
             
         Returns:
             ID of inserted record
@@ -185,8 +204,8 @@ class DatabaseManager:
                 INSERT INTO processed_imagery (
                     acquisition_date, tile_id, cloud_coverage,
                     ndvi_path, savi_path, evi_path, ndwi_path, ndsi_path,
-                    metadata_json, processed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    metadata_json, processed_at, synthetic
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 acquisition_date,
                 tile_id,
@@ -197,11 +216,13 @@ class DatabaseManager:
                 geotiff_paths.get('NDWI'),
                 geotiff_paths.get('NDSI'),
                 json.dumps(metadata),
-                datetime.now().isoformat()
+                datetime.now().isoformat(),
+                1 if synthetic else 0
             ))
             
             imagery_id = cursor.lastrowid
-            logger.info(f"Saved processed imagery record: ID={imagery_id}, tile={tile_id}")
+            data_type = "synthetic" if synthetic else "real"
+            logger.info(f"Saved processed imagery record: ID={imagery_id}, tile={tile_id}, type={data_type}")
             return imagery_id
     
     def get_processed_imagery(self, imagery_id: int) -> Optional[Dict[str, Any]]:
@@ -225,12 +246,14 @@ class DatabaseManager:
                 return dict(row)
             return None
     
-    def get_latest_imagery(self, tile_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_latest_imagery(self, tile_id: Optional[str] = None, prefer_real: bool = True) -> Optional[Dict[str, Any]]:
         """
         Get the most recent processed imagery record.
+        Prioritizes real data over synthetic data by default.
         
         Args:
             tile_id: Optional tile ID filter
+            prefer_real: If True, prioritize real data (synthetic=0) over synthetic data
             
         Returns:
             Dictionary with imagery data or None if not found
@@ -238,6 +261,31 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
+            if prefer_real:
+                # Try to get real data first
+                if tile_id:
+                    cursor.execute("""
+                        SELECT * FROM processed_imagery 
+                        WHERE tile_id = ? AND synthetic = 0
+                        ORDER BY acquisition_date DESC 
+                        LIMIT 1
+                    """, (tile_id,))
+                else:
+                    cursor.execute("""
+                        SELECT * FROM processed_imagery 
+                        WHERE synthetic = 0
+                        ORDER BY acquisition_date DESC 
+                        LIMIT 1
+                    """)
+                
+                row = cursor.fetchone()
+                if row:
+                    return dict(row)
+                
+                # Fall back to synthetic data if no real data available
+                logger.debug("No real data found, falling back to synthetic data")
+            
+            # Get any data (including synthetic)
             if tile_id:
                 cursor.execute("""
                     SELECT * FROM processed_imagery 
@@ -259,13 +307,15 @@ class DatabaseManager:
     
     def list_processed_imagery(self, 
                               tile_id: Optional[str] = None,
-                              limit: int = 50) -> List[Dict[str, Any]]:
+                              limit: int = 50,
+                              synthetic: Optional[bool] = None) -> List[Dict[str, Any]]:
         """
         List processed imagery records with optional filtering.
         
         Args:
             tile_id: Optional tile ID filter
             limit: Maximum number of records to return
+            synthetic: Optional filter - True for synthetic only, False for real only, None for all
             
         Returns:
             List of imagery record dictionaries
@@ -273,27 +323,29 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            if tile_id:
-                cursor.execute("""
-                    SELECT * FROM processed_imagery 
-                    WHERE tile_id = ?
-                    ORDER BY acquisition_date DESC 
-                    LIMIT ?
-                """, (tile_id, limit))
-            else:
-                cursor.execute("""
-                    SELECT * FROM processed_imagery 
-                    ORDER BY acquisition_date DESC 
-                    LIMIT ?
-                """, (limit,))
+            query = "SELECT * FROM processed_imagery WHERE 1=1"
+            params = []
             
+            if tile_id:
+                query += " AND tile_id = ?"
+                params.append(tile_id)
+            
+            if synthetic is not None:
+                query += " AND synthetic = ?"
+                params.append(1 if synthetic else 0)
+            
+            query += " ORDER BY acquisition_date DESC LIMIT ?"
+            params.append(limit)
+            
+            cursor.execute(query, params)
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
     
     def get_temporal_series(self, 
                            tile_id: str,
                            start_date: Optional[str] = None,
-                           end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+                           end_date: Optional[str] = None,
+                           synthetic: Optional[bool] = None) -> List[Dict[str, Any]]:
         """
         Get time series of imagery for temporal analysis.
         
@@ -301,6 +353,7 @@ class DatabaseManager:
             tile_id: Tile identifier
             start_date: Optional start date (ISO format)
             end_date: Optional end date (ISO format)
+            synthetic: Optional filter - True for synthetic only, False for real only, None for all
             
         Returns:
             List of imagery records ordered by date
@@ -319,11 +372,97 @@ class DatabaseManager:
                 query += " AND acquisition_date <= ?"
                 params.append(end_date)
             
+            if synthetic is not None:
+                query += " AND synthetic = ?"
+                params.append(1 if synthetic else 0)
+            
             query += " ORDER BY acquisition_date ASC"
             
             cursor.execute(query, params)
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
+    
+    def get_real_imagery(self, 
+                        tile_id: Optional[str] = None,
+                        limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get only real (non-synthetic) imagery records.
+        
+        Args:
+            tile_id: Optional tile ID filter
+            limit: Maximum number of records to return
+            
+        Returns:
+            List of real imagery record dictionaries
+        """
+        return self.list_processed_imagery(tile_id=tile_id, limit=limit, synthetic=False)
+    
+    def get_synthetic_imagery(self, 
+                             tile_id: Optional[str] = None,
+                             limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get only synthetic imagery records.
+        
+        Args:
+            tile_id: Optional tile ID filter
+            limit: Maximum number of records to return
+            
+        Returns:
+            List of synthetic imagery record dictionaries
+        """
+        return self.list_processed_imagery(tile_id=tile_id, limit=limit, synthetic=True)
+    
+    def count_real_imagery(self, tile_id: Optional[str] = None) -> int:
+        """
+        Count real (non-synthetic) imagery records.
+        
+        Args:
+            tile_id: Optional tile ID filter
+            
+        Returns:
+            Count of real imagery records
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if tile_id:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM processed_imagery 
+                    WHERE synthetic = 0 AND tile_id = ?
+                """, (tile_id,))
+            else:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM processed_imagery 
+                    WHERE synthetic = 0
+                """)
+            
+            return cursor.fetchone()[0]
+    
+    def count_synthetic_imagery(self, tile_id: Optional[str] = None) -> int:
+        """
+        Count synthetic imagery records.
+        
+        Args:
+            tile_id: Optional tile ID filter
+            
+        Returns:
+            Count of synthetic imagery records
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if tile_id:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM processed_imagery 
+                    WHERE synthetic = 1 AND tile_id = ?
+                """, (tile_id,))
+            else:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM processed_imagery 
+                    WHERE synthetic = 1
+                """)
+            
+            return cursor.fetchone()[0]
     
     # ========== Alert Operations ==========
     
@@ -448,6 +587,56 @@ class DatabaseManager:
                 return True
             return False
     
+    def get_alert_frequency_by_type(self, days: int = 30) -> Dict[str, int]:
+        """
+        Get alert frequency by type for the last N days.
+        
+        Args:
+            days: Number of days to look back
+            
+        Returns:
+            Dictionary mapping alert types to counts
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+            
+            cursor.execute("""
+                SELECT alert_type, COUNT(*) as count
+                FROM alerts
+                WHERE created_at >= ?
+                GROUP BY alert_type
+                ORDER BY count DESC
+            """, (cutoff_date,))
+            
+            rows = cursor.fetchall()
+            return {row['alert_type']: row['count'] for row in rows}
+    
+    def get_recurring_alerts(self, min_occurrences: int = 3) -> List[Dict[str, Any]]:
+        """
+        Get alerts that have occurred multiple times (recurring patterns).
+        
+        Args:
+            min_occurrences: Minimum number of occurrences to be considered recurring
+            
+        Returns:
+            List of recurring alert patterns
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT alert_type, severity, COUNT(*) as occurrence_count,
+                       MIN(created_at) as first_occurrence,
+                       MAX(created_at) as last_occurrence
+                FROM alerts
+                GROUP BY alert_type, severity
+                HAVING COUNT(*) >= ?
+                ORDER BY occurrence_count DESC
+            """, (min_occurrences,))
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+    
     def get_alerts_by_severity(self, severity: str) -> List[Dict[str, Any]]:
         """
         Get alerts filtered by severity level.
@@ -563,7 +752,7 @@ class DatabaseManager:
     
     def get_database_stats(self) -> Dict[str, Any]:
         """
-        Get database statistics.
+        Get database statistics including real vs synthetic data counts.
         
         Returns:
             Dictionary with database statistics
@@ -577,6 +766,13 @@ class DatabaseManager:
             cursor.execute("SELECT COUNT(*) FROM processed_imagery")
             stats['imagery_count'] = cursor.fetchone()[0]
             
+            # Count real vs synthetic imagery
+            cursor.execute("SELECT COUNT(*) FROM processed_imagery WHERE synthetic = 0")
+            stats['real_imagery_count'] = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM processed_imagery WHERE synthetic = 1")
+            stats['synthetic_imagery_count'] = cursor.fetchone()[0]
+            
             cursor.execute("SELECT COUNT(*) FROM alerts")
             stats['total_alerts'] = cursor.fetchone()[0]
             
@@ -586,7 +782,7 @@ class DatabaseManager:
             cursor.execute("SELECT COUNT(*) FROM ai_predictions")
             stats['predictions_count'] = cursor.fetchone()[0]
             
-            # Get date range
+            # Get date range for all imagery
             cursor.execute("""
                 SELECT MIN(acquisition_date), MAX(acquisition_date) 
                 FROM processed_imagery
@@ -595,6 +791,18 @@ class DatabaseManager:
             stats['date_range'] = {
                 'earliest': date_range[0],
                 'latest': date_range[1]
+            }
+            
+            # Get date range for real imagery only
+            cursor.execute("""
+                SELECT MIN(acquisition_date), MAX(acquisition_date) 
+                FROM processed_imagery
+                WHERE synthetic = 0
+            """)
+            real_date_range = cursor.fetchone()
+            stats['real_date_range'] = {
+                'earliest': real_date_range[0],
+                'latest': real_date_range[1]
             }
             
             return stats

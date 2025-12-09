@@ -78,6 +78,15 @@ models/
 *.SAFE/
 *.zip
 *.tar.gz
+*.tif
+*.tiff
+*.jp2
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.pkl
+*.pickle
 
 # Jupyter Notebooks
 .ipynb_checkpoints/

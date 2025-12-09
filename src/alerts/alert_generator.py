@@ -36,7 +36,7 @@ class AlertType(Enum):
 @dataclass
 class Alert:
     """
-    Alert data structure.
+    Alert data structure with enhanced contextual information.
     
     Attributes:
         alert_type: Type of alert
@@ -46,6 +46,11 @@ class Alert:
         affected_area_percentage: Percentage of area affected (0-100)
         affected_area_geojson: Optional GeoJSON of affected area
         metadata: Additional metadata dictionary
+        field_name: Optional field/location name
+        coordinates: Optional coordinates (lat, lon) tuple
+        historical_context: Optional historical comparison text
+        rate_of_change: Optional rate of change value
+        priority_score: Calculated priority score (0-100)
     """
     alert_type: AlertType
     severity: AlertSeverity
@@ -54,6 +59,11 @@ class Alert:
     affected_area_percentage: float
     affected_area_geojson: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+    field_name: Optional[str] = None
+    coordinates: Optional[Tuple[float, float]] = None
+    historical_context: Optional[str] = None
+    rate_of_change: Optional[float] = None
+    priority_score: float = 0.0
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert alert to dictionary for database storage."""
@@ -63,7 +73,14 @@ class Alert:
             'message': self.message,
             'recommendation': self.recommendation,
             'affected_area': self.affected_area_geojson,
-            'metadata': json.dumps(self.metadata) if self.metadata else None
+            'metadata': json.dumps({
+                **(self.metadata or {}),
+                'field_name': self.field_name,
+                'coordinates': self.coordinates,
+                'historical_context': self.historical_context,
+                'rate_of_change': self.rate_of_change,
+                'priority_score': self.priority_score
+            })
         }
 
 
@@ -115,7 +132,113 @@ class AlertGenerator:
     
     def __init__(self):
         """Initialize the alert generator."""
+        self.historical_data = {}  # Store historical values for comparison
         logger.info("Initialized AlertGenerator")
+    
+    def calculate_priority_score(self, 
+                                 severity: AlertSeverity,
+                                 affected_area_pct: float,
+                                 rate_of_change: Optional[float] = None) -> float:
+        """
+        Calculate priority score for alert ranking.
+        
+        Priority score is based on:
+        - Severity level (40% weight)
+        - Affected area percentage (30% weight)
+        - Rate of change/trend (30% weight)
+        
+        Args:
+            severity: Alert severity level
+            affected_area_pct: Percentage of area affected (0-100)
+            rate_of_change: Optional rate of change value
+            
+        Returns:
+            Priority score from 0-100
+        """
+        # Severity scoring (0-40 points)
+        severity_scores = {
+            AlertSeverity.CRITICAL: 40,
+            AlertSeverity.HIGH: 30,
+            AlertSeverity.MEDIUM: 20,
+            AlertSeverity.LOW: 10
+        }
+        severity_score = severity_scores.get(severity, 10)
+        
+        # Affected area scoring (0-30 points)
+        # Linear scale: 0% = 0 points, 100% = 30 points
+        area_score = min(30, (affected_area_pct / 100) * 30)
+        
+        # Rate of change scoring (0-30 points)
+        # Higher absolute rate of change = higher score
+        if rate_of_change is not None:
+            # Normalize rate of change to 0-30 scale
+            # Assume rate of change is in percentage points per day
+            # Rapid changes (>5% per day) get max score
+            rate_score = min(30, abs(rate_of_change) * 6)
+        else:
+            rate_score = 15  # Default middle score if no rate data
+        
+        total_score = severity_score + area_score + rate_score
+        return round(total_score, 2)
+    
+    def add_historical_context(self,
+                              current_value: float,
+                              index_name: str,
+                              field_name: Optional[str] = None) -> Optional[str]:
+        """
+        Generate historical context text by comparing to previous values.
+        
+        Args:
+            current_value: Current index value
+            index_name: Name of the index (e.g., 'NDVI')
+            field_name: Optional field identifier
+            
+        Returns:
+            Historical context string or None if no history available
+        """
+        key = f"{field_name or 'default'}_{index_name}"
+        
+        if key in self.historical_data:
+            previous_value = self.historical_data[key]
+            change = current_value - previous_value
+            change_pct = (change / previous_value * 100) if previous_value != 0 else 0
+            
+            if abs(change_pct) < 2:
+                context = f"{index_name} stable at {current_value:.3f} (no significant change from previous {previous_value:.3f})"
+            elif change_pct > 0:
+                context = f"{index_name} increased {abs(change_pct):.1f}% from {previous_value:.3f} to {current_value:.3f}"
+            else:
+                context = f"{index_name} dropped {abs(change_pct):.1f}% from {previous_value:.3f} to {current_value:.3f}"
+            
+            # Update historical data
+            self.historical_data[key] = current_value
+            return context
+        else:
+            # First time seeing this field/index combination
+            self.historical_data[key] = current_value
+            return None
+    
+    def calculate_rate_of_change(self,
+                                 current_value: float,
+                                 previous_value: float,
+                                 days_elapsed: float = 1.0) -> float:
+        """
+        Calculate rate of change per day.
+        
+        Args:
+            current_value: Current value
+            previous_value: Previous value
+            days_elapsed: Number of days between measurements
+            
+        Returns:
+            Rate of change per day (percentage points)
+        """
+        if previous_value == 0 or days_elapsed == 0:
+            return 0.0
+        
+        change = current_value - previous_value
+        rate = (change / days_elapsed)
+        return rate
     
     def generate_alerts(self,
                        ndvi: Optional[np.ndarray] = None,
@@ -124,9 +247,13 @@ class AlertGenerator:
                        ndwi: Optional[np.ndarray] = None,
                        temperature: Optional[float] = None,
                        humidity: Optional[float] = None,
-                       metadata: Optional[Dict[str, Any]] = None) -> List[Alert]:
+                       metadata: Optional[Dict[str, Any]] = None,
+                       field_name: Optional[str] = None,
+                       coordinates: Optional[Tuple[float, float]] = None,
+                       previous_values: Optional[Dict[str, float]] = None,
+                       days_since_last: float = 7.0) -> List[Alert]:
         """
-        Generate alerts based on vegetation indices and environmental data.
+        Generate alerts based on vegetation indices and environmental data with enhanced context.
         
         Args:
             ndvi: NDVI array (optional)
@@ -136,44 +263,68 @@ class AlertGenerator:
             temperature: Temperature in Celsius (optional)
             humidity: Relative humidity percentage (optional)
             metadata: Additional metadata (optional)
+            field_name: Name/identifier of the field (optional)
+            coordinates: (latitude, longitude) tuple (optional)
+            previous_values: Dictionary of previous index values for comparison (optional)
+            days_since_last: Days elapsed since last measurement (default: 7)
         
         Returns:
-            List of Alert objects
+            List of Alert objects with enhanced contextual information
         """
         alerts = []
         
         # Generate vegetation stress alerts
         if ndvi is not None:
-            alerts.extend(self._check_ndvi_stress(ndvi, metadata))
+            alerts.extend(self._check_ndvi_stress(
+                ndvi, metadata, field_name, coordinates, 
+                previous_values.get('ndvi') if previous_values else None,
+                days_since_last
+            ))
         
         if savi is not None:
-            alerts.extend(self._check_savi_stress(savi, metadata))
+            alerts.extend(self._check_savi_stress(
+                savi, metadata, field_name, coordinates,
+                previous_values.get('savi') if previous_values else None,
+                days_since_last
+            ))
         
         if evi is not None:
-            alerts.extend(self._check_evi_stress(evi, metadata))
+            alerts.extend(self._check_evi_stress(
+                evi, metadata, field_name, coordinates,
+                previous_values.get('evi') if previous_values else None,
+                days_since_last
+            ))
         
         # Generate water stress alerts
         if ndwi is not None:
-            alerts.extend(self._check_water_stress(ndwi, metadata))
+            alerts.extend(self._check_water_stress(
+                ndwi, metadata, field_name, coordinates,
+                previous_values.get('ndwi') if previous_values else None,
+                days_since_last
+            ))
         
         # Generate environmental alerts
         if temperature is not None or humidity is not None:
             alerts.extend(self._check_environmental_conditions(
-                temperature, humidity, metadata
+                temperature, humidity, metadata, field_name, coordinates
             ))
         
         # Generate pest/disease risk alerts
         if temperature is not None and humidity is not None:
             alerts.extend(self._check_pest_disease_risk(
-                temperature, humidity, metadata
+                temperature, humidity, metadata, field_name, coordinates
             ))
         
-        logger.info(f"Generated {len(alerts)} alerts")
+        logger.info(f"Generated {len(alerts)} alerts for field '{field_name or 'unknown'}'")
         return alerts
     
     def _check_ndvi_stress(self, ndvi: np.ndarray, 
-                          metadata: Optional[Dict] = None) -> List[Alert]:
-        """Check for vegetation stress based on NDVI values."""
+                          metadata: Optional[Dict] = None,
+                          field_name: Optional[str] = None,
+                          coordinates: Optional[Tuple[float, float]] = None,
+                          previous_ndvi: Optional[float] = None,
+                          days_since_last: float = 7.0) -> List[Alert]:
+        """Check for vegetation stress based on NDVI values with enhanced context."""
         alerts = []
         
         # Filter out invalid NDVI values (< -1 or > 1)
@@ -184,6 +335,13 @@ class AlertGenerator:
         
         # Calculate statistics
         mean_ndvi = np.mean(valid_ndvi)
+        
+        # Calculate rate of change if previous value available
+        rate_of_change = None
+        historical_context = None
+        if previous_ndvi is not None:
+            rate_of_change = self.calculate_rate_of_change(mean_ndvi, previous_ndvi, days_since_last)
+            historical_context = self.add_historical_context(mean_ndvi, 'NDVI', field_name)
         
         # Count pixels in each stress category
         critical_pixels = np.sum(valid_ndvi <= self.NDVI_CRITICAL)
@@ -204,12 +362,24 @@ class AlertGenerator:
         
         # Generate alerts based on severity and affected area
         if critical_pct > self.AREA_CRITICAL_THRESHOLD:
+            severity = AlertSeverity.CRITICAL
+            location_text = f" at {field_name}" if field_name else ""
+            coord_text = f" (coordinates: {coordinates[0]:.4f}, {coordinates[1]:.4f})" if coordinates else ""
+            history_text = f". {historical_context}" if historical_context else ""
+            
+            message = f"Severe vegetation stress detected{location_text}: {critical_pct:.1f}% of area has NDVI ≤ {self.NDVI_CRITICAL}{history_text}"
+            
             alerts.append(Alert(
                 alert_type=AlertType.VEGETATION_STRESS,
-                severity=AlertSeverity.CRITICAL,
-                message=f"Severe vegetation stress detected: {critical_pct:.1f}% of area has NDVI ≤ {self.NDVI_CRITICAL}",
+                severity=severity,
+                message=message,
                 recommendation="IMMEDIATE ACTION REQUIRED: Inspect affected areas for pest damage, disease, or irrigation failure. Consider emergency irrigation and soil testing.",
                 affected_area_percentage=critical_pct,
+                field_name=field_name,
+                coordinates=coordinates,
+                historical_context=historical_context,
+                rate_of_change=rate_of_change,
+                priority_score=self.calculate_priority_score(severity, critical_pct, rate_of_change),
                 metadata={
                     'mean_ndvi': float(mean_ndvi),
                     'index_type': 'NDVI',
@@ -218,12 +388,24 @@ class AlertGenerator:
                 }
             ))
         elif critical_pct > 0:
+            severity = AlertSeverity.HIGH
+            location_text = f" at {field_name}" if field_name else ""
+            coord_text = f" (coordinates: {coordinates[0]:.4f}, {coordinates[1]:.4f})" if coordinates else ""
+            history_text = f". {historical_context}" if historical_context else ""
+            
+            message = f"Critical vegetation stress{location_text}: {critical_pct:.1f}% of area (NDVI ≤ {self.NDVI_CRITICAL}){history_text}"
+            
             alerts.append(Alert(
                 alert_type=AlertType.VEGETATION_STRESS,
-                severity=AlertSeverity.HIGH,
-                message=f"Critical vegetation stress in {critical_pct:.1f}% of area (NDVI ≤ {self.NDVI_CRITICAL})",
+                severity=severity,
+                message=message,
                 recommendation="Urgent inspection required. Check irrigation systems, test soil moisture, and look for signs of pest or disease damage.",
                 affected_area_percentage=critical_pct,
+                field_name=field_name,
+                coordinates=coordinates,
+                historical_context=historical_context,
+                rate_of_change=rate_of_change,
+                priority_score=self.calculate_priority_score(severity, critical_pct, rate_of_change),
                 metadata={
                     'mean_ndvi': float(mean_ndvi),
                     'index_type': 'NDVI',
@@ -233,12 +415,21 @@ class AlertGenerator:
             ))
         
         if high_stress_pct > self.AREA_HIGH_THRESHOLD:
+            severity = AlertSeverity.HIGH
+            location_text = f" at {field_name}" if field_name else ""
+            history_text = f". {historical_context}" if historical_context else ""
+            
             alerts.append(Alert(
                 alert_type=AlertType.VEGETATION_STRESS,
-                severity=AlertSeverity.HIGH,
-                message=f"High vegetation stress detected: {high_stress_pct:.1f}% of area has NDVI between {self.NDVI_CRITICAL} and {self.NDVI_HIGH_STRESS}",
+                severity=severity,
+                message=f"High vegetation stress detected{location_text}: {high_stress_pct:.1f}% of area has NDVI between {self.NDVI_CRITICAL} and {self.NDVI_HIGH_STRESS}{history_text}",
                 recommendation="Increase irrigation frequency, monitor closely for pest activity, and consider nutrient supplementation.",
                 affected_area_percentage=high_stress_pct,
+                field_name=field_name,
+                coordinates=coordinates,
+                historical_context=historical_context,
+                rate_of_change=rate_of_change,
+                priority_score=self.calculate_priority_score(severity, high_stress_pct, rate_of_change),
                 metadata={
                     'mean_ndvi': float(mean_ndvi),
                     'index_type': 'NDVI',
@@ -248,12 +439,21 @@ class AlertGenerator:
             ))
         
         if medium_stress_pct > self.AREA_MEDIUM_THRESHOLD:
+            severity = AlertSeverity.MEDIUM
+            location_text = f" at {field_name}" if field_name else ""
+            history_text = f". {historical_context}" if historical_context else ""
+            
             alerts.append(Alert(
                 alert_type=AlertType.VEGETATION_STRESS,
-                severity=AlertSeverity.MEDIUM,
-                message=f"Moderate vegetation stress: {medium_stress_pct:.1f}% of area has NDVI between {self.NDVI_HIGH_STRESS} and {self.NDVI_MEDIUM_STRESS}",
+                severity=severity,
+                message=f"Moderate vegetation stress{location_text}: {medium_stress_pct:.1f}% of area has NDVI between {self.NDVI_HIGH_STRESS} and {self.NDVI_MEDIUM_STRESS}{history_text}",
                 recommendation="Review irrigation schedule, monitor weather conditions, and prepare for potential intervention.",
                 affected_area_percentage=medium_stress_pct,
+                field_name=field_name,
+                coordinates=coordinates,
+                historical_context=historical_context,
+                rate_of_change=rate_of_change,
+                priority_score=self.calculate_priority_score(severity, medium_stress_pct, rate_of_change),
                 metadata={
                     'mean_ndvi': float(mean_ndvi),
                     'index_type': 'NDVI',
@@ -263,12 +463,21 @@ class AlertGenerator:
             ))
         
         if low_stress_pct > self.AREA_MEDIUM_THRESHOLD:
+            severity = AlertSeverity.LOW
+            location_text = f" at {field_name}" if field_name else ""
+            history_text = f". {historical_context}" if historical_context else ""
+            
             alerts.append(Alert(
                 alert_type=AlertType.VEGETATION_STRESS,
-                severity=AlertSeverity.LOW,
-                message=f"Minor vegetation stress: {low_stress_pct:.1f}% of area has NDVI between {self.NDVI_MEDIUM_STRESS} and {self.NDVI_LOW_STRESS}",
+                severity=severity,
+                message=f"Minor vegetation stress{location_text}: {low_stress_pct:.1f}% of area has NDVI between {self.NDVI_MEDIUM_STRESS} and {self.NDVI_LOW_STRESS}{history_text}",
                 recommendation="Continue routine monitoring. Consider optimizing irrigation and fertilization schedules.",
                 affected_area_percentage=low_stress_pct,
+                field_name=field_name,
+                coordinates=coordinates,
+                historical_context=historical_context,
+                rate_of_change=rate_of_change,
+                priority_score=self.calculate_priority_score(severity, low_stress_pct, rate_of_change),
                 metadata={
                     'mean_ndvi': float(mean_ndvi),
                     'index_type': 'NDVI',
@@ -280,8 +489,12 @@ class AlertGenerator:
         return alerts
     
     def _check_savi_stress(self, savi: np.ndarray,
-                          metadata: Optional[Dict] = None) -> List[Alert]:
-        """Check for vegetation stress based on SAVI values."""
+                          metadata: Optional[Dict] = None,
+                          field_name: Optional[str] = None,
+                          coordinates: Optional[Tuple[float, float]] = None,
+                          previous_savi: Optional[float] = None,
+                          days_since_last: float = 7.0) -> List[Alert]:
+        """Check for vegetation stress based on SAVI values with enhanced context."""
         alerts = []
         
         # Filter valid SAVI values
@@ -293,17 +506,33 @@ class AlertGenerator:
         mean_savi = np.mean(valid_savi)
         total_pixels = valid_savi.size
         
+        # Calculate rate of change if previous value available
+        rate_of_change = None
+        historical_context = None
+        if previous_savi is not None:
+            rate_of_change = self.calculate_rate_of_change(mean_savi, previous_savi, days_since_last)
+            historical_context = self.add_historical_context(mean_savi, 'SAVI', field_name)
+        
         # Check critical stress
         critical_pixels = np.sum(valid_savi <= self.SAVI_CRITICAL)
         critical_pct = (critical_pixels / total_pixels) * 100
         
         if critical_pct > self.AREA_CRITICAL_THRESHOLD:
+            severity = AlertSeverity.CRITICAL
+            location_text = f" at {field_name}" if field_name else ""
+            history_text = f". {historical_context}" if historical_context else ""
+            
             alerts.append(Alert(
                 alert_type=AlertType.VEGETATION_STRESS,
-                severity=AlertSeverity.CRITICAL,
-                message=f"Severe soil-adjusted vegetation stress: {critical_pct:.1f}% of area has SAVI ≤ {self.SAVI_CRITICAL}",
+                severity=severity,
+                message=f"Severe soil-adjusted vegetation stress{location_text}: {critical_pct:.1f}% of area has SAVI ≤ {self.SAVI_CRITICAL}{history_text}",
                 recommendation="Critical soil and vegetation conditions detected. Immediate soil testing and irrigation assessment required.",
                 affected_area_percentage=critical_pct,
+                field_name=field_name,
+                coordinates=coordinates,
+                historical_context=historical_context,
+                rate_of_change=rate_of_change,
+                priority_score=self.calculate_priority_score(severity, critical_pct, rate_of_change),
                 metadata={
                     'mean_savi': float(mean_savi),
                     'index_type': 'SAVI',
@@ -315,7 +544,11 @@ class AlertGenerator:
         return alerts
     
     def _check_evi_stress(self, evi: np.ndarray,
-                         metadata: Optional[Dict] = None) -> List[Alert]:
+                         metadata: Optional[Dict] = None,
+                         field_name: Optional[str] = None,
+                         coordinates: Optional[Tuple[float, float]] = None,
+                         previous_evi: Optional[float] = None,
+                         days_since_last: float = 7.0) -> List[Alert]:
         """Check for vegetation stress based on EVI values."""
         alerts = []
         
@@ -350,7 +583,11 @@ class AlertGenerator:
         return alerts
     
     def _check_water_stress(self, ndwi: np.ndarray,
-                           metadata: Optional[Dict] = None) -> List[Alert]:
+                           metadata: Optional[Dict] = None,
+                           field_name: Optional[str] = None,
+                           coordinates: Optional[Tuple[float, float]] = None,
+                           previous_ndwi: Optional[float] = None,
+                           days_since_last: float = 7.0) -> List[Alert]:
         """Check for water stress based on NDWI values."""
         alerts = []
         
@@ -423,7 +660,9 @@ class AlertGenerator:
     def _check_environmental_conditions(self,
                                        temperature: Optional[float],
                                        humidity: Optional[float],
-                                       metadata: Optional[Dict] = None) -> List[Alert]:
+                                       metadata: Optional[Dict] = None,
+                                       field_name: Optional[str] = None,
+                                       coordinates: Optional[Tuple[float, float]] = None) -> List[Alert]:
         """Check environmental conditions for alerts."""
         alerts = []
         
@@ -490,7 +729,9 @@ class AlertGenerator:
     def _check_pest_disease_risk(self,
                                 temperature: float,
                                 humidity: float,
-                                metadata: Optional[Dict] = None) -> List[Alert]:
+                                metadata: Optional[Dict] = None,
+                                field_name: Optional[str] = None,
+                                coordinates: Optional[Tuple[float, float]] = None) -> List[Alert]:
         """Check for pest and disease risk based on environmental conditions."""
         alerts = []
         
@@ -545,6 +786,115 @@ class AlertGenerator:
         
         return alerts
     
+    def _create_alert_with_context(self,
+                                   alert_type: AlertType,
+                                   severity: AlertSeverity,
+                                   base_message: str,
+                                   recommendation: str,
+                                   affected_area_pct: float,
+                                   field_name: Optional[str],
+                                   coordinates: Optional[Tuple[float, float]],
+                                   historical_context: Optional[str],
+                                   rate_of_change: Optional[float],
+                                   metadata: Optional[Dict]) -> Alert:
+        """
+        Helper method to create an alert with full contextual information.
+        
+        Args:
+            alert_type: Type of alert
+            severity: Severity level
+            base_message: Base alert message
+            recommendation: Recommended action
+            affected_area_pct: Percentage of area affected
+            field_name: Optional field name
+            coordinates: Optional coordinates
+            historical_context: Optional historical context text
+            rate_of_change: Optional rate of change value
+            metadata: Optional metadata dictionary
+            
+        Returns:
+            Alert object with full context
+        """
+        # Enhance message with location and historical context
+        location_text = f" at {field_name}" if field_name else ""
+        history_text = f". {historical_context}" if historical_context else ""
+        enhanced_message = f"{base_message}{location_text}{history_text}"
+        
+        return Alert(
+            alert_type=alert_type,
+            severity=severity,
+            message=enhanced_message,
+            recommendation=recommendation,
+            affected_area_percentage=affected_area_pct,
+            field_name=field_name,
+            coordinates=coordinates,
+            historical_context=historical_context,
+            rate_of_change=rate_of_change,
+            priority_score=self.calculate_priority_score(severity, affected_area_pct, rate_of_change),
+            metadata=metadata
+        )
+    
+    def rank_alerts_by_priority(self, alerts: List[Alert]) -> List[Alert]:
+        """
+        Rank alerts by priority score in descending order.
+        
+        Args:
+            alerts: List of Alert objects
+            
+        Returns:
+            Sorted list of alerts (highest priority first)
+        """
+        return sorted(alerts, key=lambda a: a.priority_score, reverse=True)
+    
+    def get_top_priority_alerts(self, alerts: List[Alert], top_n: int = 5) -> List[Alert]:
+        """
+        Get the top N highest priority alerts.
+        
+        Args:
+            alerts: List of Alert objects
+            top_n: Number of top alerts to return (default: 5)
+            
+        Returns:
+            List of top N alerts sorted by priority
+        """
+        ranked = self.rank_alerts_by_priority(alerts)
+        return ranked[:top_n]
+    
+    def categorize_alerts(self, alerts: List[Alert]) -> Dict[str, List[Alert]]:
+        """
+        Categorize alerts into "Needs Attention" and "For Information" categories.
+        
+        Needs Attention: Critical/High severity OR priority score >= 60
+        For Information: Medium/Low severity AND priority score < 60
+        
+        Args:
+            alerts: List of Alert objects
+            
+        Returns:
+            Dictionary with 'needs_attention' and 'for_information' lists
+        """
+        needs_attention = []
+        for_information = []
+        
+        for alert in alerts:
+            # Critical and High severity always need attention
+            if alert.severity in [AlertSeverity.CRITICAL, AlertSeverity.HIGH]:
+                needs_attention.append(alert)
+            # High priority score also needs attention
+            elif alert.priority_score >= 60:
+                needs_attention.append(alert)
+            else:
+                for_information.append(alert)
+        
+        # Sort each category by priority
+        needs_attention = self.rank_alerts_by_priority(needs_attention)
+        for_information = self.rank_alerts_by_priority(for_information)
+        
+        return {
+            'needs_attention': needs_attention,
+            'for_information': for_information
+        }
+    
     def get_alert_summary(self, alerts: List[Alert]) -> Dict[str, Any]:
         """
         Generate summary statistics for a list of alerts.
@@ -560,14 +910,26 @@ class AlertGenerator:
                 'total_alerts': 0,
                 'by_severity': {},
                 'by_type': {},
-                'max_affected_area': 0.0
+                'by_category': {'needs_attention': 0, 'for_information': 0},
+                'max_affected_area': 0.0,
+                'avg_priority_score': 0.0,
+                'top_5_alerts': []
             }
+        
+        # Categorize alerts
+        categorized = self.categorize_alerts(alerts)
         
         summary = {
             'total_alerts': len(alerts),
             'by_severity': {},
             'by_type': {},
-            'max_affected_area': max(a.affected_area_percentage for a in alerts)
+            'by_category': {
+                'needs_attention': len(categorized['needs_attention']),
+                'for_information': len(categorized['for_information'])
+            },
+            'max_affected_area': max(a.affected_area_percentage for a in alerts),
+            'avg_priority_score': sum(a.priority_score for a in alerts) / len(alerts),
+            'top_5_alerts': self.get_top_priority_alerts(alerts, 5)
         }
         
         # Count by severity

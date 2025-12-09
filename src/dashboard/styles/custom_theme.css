@@ -1,0 +1,664 @@
+/* 
+ * AgriFlux Custom Theme
+ * Modern UI/UX design with professional styling
+ * Requirements: 7.1, 7.2, 7.3, 7.4
+ */
+
+/* ============================================================================
+ * GOOGLE FONTS IMPORT
+ * ============================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
+
+/* ============================================================================
+ * CSS VARIABLES - COLOR PALETTE
+ * ============================================================================ */
+:root {
+    /* Primary Colors */
+    --primary-color: #4caf50;
+    --primary-light: #66bb6a;
+    --primary-dark: #388e3c;
+    
+    /* Secondary Colors */
+    --secondary-color: #2196f3;
+    --secondary-light: #42a5f5;
+    --secondary-dark: #1976d2;
+    
+    /* Accent Colors */
+    --accent-color: #ff9800;
+    --accent-light: #ffa726;
+    --accent-dark: #f57c00;
+    
+    /* Background Colors - Pure Black Theme */
+    --bg-primary: #000000;
+    --bg-secondary: #0a0a0a;
+    --bg-surface: #0f0f0f;
+    --bg-surface-light: #1a1a1a;
+    
+    /* Text Colors */
+    --text-primary: #ffffff;
+    --text-secondary: #a0aec0;
+    --text-muted: #718096;
+    --text-disabled: #4a5568;
+    
+    /* Status Colors */
+    --status-success: #4caf50;
+    --status-warning: #ff9800;
+    --status-error: #f44336;
+    --status-info: #2196f3;
+    
+    /* Border Colors */
+    --border-color: #3d4a5c;
+    --border-light: #4a5568;
+    --border-focus: #4caf50;
+    
+    /* Shadow Colors */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
+    --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.25);
+    --shadow-primary: 0 4px 12px rgba(76, 175, 80, 0.3);
+    
+    /* Spacing */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-full: 9999px;
+    
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-base: 0.2s ease;
+    --transition-slow: 0.3s ease;
+}
+
+/* ============================================================================
+ * TYPOGRAPHY
+ * ============================================================================ */
+body {
+    font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin-top: 0;
+}
+
+h1 {
+    font-size: 2.5rem;
+    line-height: 1.2;
+}
+
+h2 {
+    font-size: 2rem;
+    line-height: 1.3;
+}
+
+h3 {
+    font-size: 1.5rem;
+    line-height: 1.4;
+}
+
+h4 {
+    font-size: 1.25rem;
+    line-height: 1.5;
+}
+
+p {
+    margin-bottom: var(--spacing-md);
+}
+
+/* ============================================================================
+ * GRID BACKGROUND PATTERN - Pure Black with Green Grid
+ * ============================================================================ */
+.stApp {
+    background: #000000 !important;
+    position: relative;
+}
+
+.stApp::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        linear-gradient(rgba(76, 175, 80, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(76, 175, 80, 0.1) 1px, transparent 1px);
+    background-size: 30px 30px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ============================================================================
+ * COMPONENT STYLING - CARDS
+ * ============================================================================ */
+.card {
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-base);
+}
+
+.card:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-primary);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.card-body {
+    padding: var(--spacing-md) 0;
+}
+
+.card-footer {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* ============================================================================
+ * COMPONENT STYLING - BUTTONS
+ * ============================================================================ */
+.stButton > button {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+    color: var(--text-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1.5rem;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 1rem;
+    box-shadow: var(--shadow-primary);
+    transition: all var(--transition-base);
+    cursor: pointer;
+}
+
+.stButton > button:hover {
+    background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+.stButton > button:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
+}
+
+.stButton > button:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Secondary Button Style */
+.stButton.secondary > button {
+    background: linear-gradient(135deg, var(--secondary-color) 0%, var(--secondary-light) 100%);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.stButton.secondary > button:hover {
+    background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary-color) 100%);
+    box-shadow: 0 6px 16px rgba(33, 150, 243, 0.4);
+}
+
+/* ============================================================================
+ * COMPONENT STYLING - METRICS
+ * ============================================================================ */
+.metric-container {
+    background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-light) 100%);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-base);
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-light) 100%);
+    opacity: 0;
+    transition: opacity var(--transition-base);
+}
+
+.metric-container:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-primary);
+    transform: translateY(-4px);
+}
+
+.metric-container:hover::before {
+    opacity: 1;
+}
+
+.metric-title {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-sm);
+}
+
+.metric-value {
+    color: var(--text-primary);
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+    margin: var(--spacing-sm) 0;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.metric-delta {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-top: var(--spacing-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.metric-delta-positive {
+    color: var(--status-success);
+}
+
+.metric-delta-negative {
+    color: var(--status-error);
+}
+
+.metric-delta-neutral {
+    color: var(--text-secondary);
+}
+
+/* ============================================================================
+ * COMPONENT STYLING - TABLES
+ * ============================================================================ */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+}
+
+thead {
+    background: linear-gradient(135deg, var(--bg-surface-light) 0%, var(--bg-surface) 100%);
+}
+
+thead th {
+    padding: var(--spacing-md);
+    text-align: left;
+    color: var(--primary-color);
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--border-color);
+}
+
+tbody tr {
+    transition: background-color var(--transition-fast);
+}
+
+tbody tr:hover {
+    background-color: rgba(76, 175, 80, 0.05);
+}
+
+tbody td {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* ============================================================================
+ * COMPONENT STYLING - INPUTS
+ * ============================================================================ */
+input, select, textarea {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    transition: all var(--transition-base);
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+input:hover, select:hover, textarea:hover {
+    border-color: var(--border-light);
+}
+
+/* ============================================================================
+ * COMPONENT STYLING - BADGES
+ * ============================================================================ */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-success {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: var(--status-success);
+    border: 1px solid var(--status-success);
+}
+
+.badge-warning {
+    background-color: rgba(255, 152, 0, 0.2);
+    color: var(--status-warning);
+    border: 1px solid var(--status-warning);
+}
+
+.badge-error {
+    background-color: rgba(244, 67, 54, 0.2);
+    color: var(--status-error);
+    border: 1px solid var(--status-error);
+}
+
+.badge-info {
+    background-color: rgba(33, 150, 243, 0.2);
+    color: var(--status-info);
+    border: 1px solid var(--status-info);
+}
+
+/* ============================================================================
+ * COMPONENT STYLING - ALERTS
+ * ============================================================================ */
+.alert {
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    border-left: 4px solid;
+    margin: var(--spacing-md) 0;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+}
+
+.alert-success {
+    background-color: rgba(76, 175, 80, 0.1);
+    border-color: var(--status-success);
+    color: var(--status-success);
+}
+
+.alert-warning {
+    background-color: rgba(255, 152, 0, 0.1);
+    border-color: var(--status-warning);
+    color: var(--status-warning);
+}
+
+.alert-error {
+    background-color: rgba(244, 67, 54, 0.1);
+    border-color: var(--status-error);
+    color: var(--status-error);
+}
+
+.alert-info {
+    background-color: rgba(33, 150, 243, 0.1);
+    border-color: var(--status-info);
+    color: var(--status-info);
+}
+
+/* ============================================================================
+ * HOVER ANIMATIONS AND TRANSITIONS
+ * ============================================================================ */
+.hover-lift {
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+}
+
+.hover-glow {
+    transition: box-shadow var(--transition-base);
+}
+
+.hover-glow:hover {
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
+}
+
+.hover-scale {
+    transition: transform var(--transition-base);
+}
+
+.hover-scale:hover {
+    transform: scale(1.05);
+}
+
+/* ============================================================================
+ * RESPONSIVE DESIGN - TABLET (768px)
+ * ============================================================================ */
+@media (max-width: 768px) {
+    :root {
+        --spacing-lg: 1rem;
+        --spacing-xl: 1.5rem;
+    }
+    
+    h1 {
+        font-size: 2rem;
+    }
+    
+    h2 {
+        font-size: 1.75rem;
+    }
+    
+    h3 {
+        font-size: 1.25rem;
+    }
+    
+    .card {
+        padding: var(--spacing-md);
+        margin: var(--spacing-sm) 0;
+    }
+    
+    .metric-container {
+        padding: var(--spacing-md);
+        margin: var(--spacing-sm) 0;
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+    }
+    
+    .stButton > button {
+        padding: 0.625rem 1.25rem;
+        font-size: 0.875rem;
+    }
+    
+    table {
+        font-size: 0.875rem;
+    }
+    
+    thead th, tbody td {
+        padding: var(--spacing-sm);
+    }
+}
+
+/* ============================================================================
+ * RESPONSIVE DESIGN - DESKTOP (1024px+)
+ * ============================================================================ */
+@media (min-width: 1024px) {
+    .container-wide {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-lg);
+    }
+    
+    .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--spacing-lg);
+    }
+    
+    .grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: var(--spacing-lg);
+    }
+}
+
+/* ============================================================================
+ * STREAMLIT-SPECIFIC OVERRIDES
+ * ============================================================================ */
+[data-testid="stMetricValue"] {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+[data-testid="stMetricDelta"] {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+[data-testid="stSidebar"] {
+    background-color: var(--bg-secondary);
+}
+
+[data-testid="stSidebar"] label {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.main .block-container {
+    padding-top: var(--spacing-xl);
+    padding-bottom: var(--spacing-xl);
+    max-width: 100%;
+}
+
+/* ============================================================================
+ * SCROLLBAR STYLING
+ * ============================================================================ */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background-color: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--bg-surface-light);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-base);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--primary-color);
+}
+
+::-webkit-scrollbar-track {
+    background-color: var(--bg-secondary);
+}
+
+/* ============================================================================
+ * UTILITY CLASSES
+ * ============================================================================ */
+.text-center {
+    text-align: center;
+}
+
+.text-left {
+    text-align: left;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-primary {
+    color: var(--primary-color);
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: var(--spacing-xs); }
+.mt-2 { margin-top: var(--spacing-sm); }
+.mt-3 { margin-top: var(--spacing-md); }
+.mt-4 { margin-top: var(--spacing-lg); }
+.mt-5 { margin-top: var(--spacing-xl); }
+
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: var(--spacing-xs); }
+.mb-2 { margin-bottom: var(--spacing-sm); }
+.mb-3 { margin-bottom: var(--spacing-md); }
+.mb-4 { margin-bottom: var(--spacing-lg); }
+.mb-5 { margin-bottom: var(--spacing-xl); }
+
+.p-0 { padding: 0; }
+.p-1 { padding: var(--spacing-xs); }
+.p-2 { padding: var(--spacing-sm); }
+.p-3 { padding: var(--spacing-md); }
+.p-4 { padding: var(--spacing-lg); }
+.p-5 { padding: var(--spacing-xl); }

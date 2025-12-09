@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from shapely.geometry import Polygon
 
-from src.database import DatabaseConnection, DatabaseModels, DatabaseMigrations
+from src.database import DatabaseConnection, DatabaseMigrations
 from src.models import (
     SatelliteImage, MonitoringZone, SensorLocation, Alert, IndexTimeSeries
 )

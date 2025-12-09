@@ -1,0 +1,43 @@
+{
+  "vegetation_indices": {
+    "ndvi": 9.754208087921143,
+    "savi": 1.3416671752929688,
+    "evi": 4.40950608253479,
+    "ndwi": 8.100243091583252,
+    "total": 23.605624437332153,
+    "array_size": "10980x10980",
+    "target": "< 10s",
+    "status": "\u274c FAIL"
+  },
+  "cnn_inference": {
+    "avg_time_ms": 1.7154932022094727,
+    "std_time_ms": 2.5483016335844026,
+    "min_time_ms": 0.21767616271972656,
+    "max_time_ms": 7.446050643920898,
+    "patch_size": "64x64x4",
+    "target": "< 100ms",
+    "status": "\u2705 PASS"
+  },
+  "lstm_prediction": {
+    "avg_time_ms": 0.33550262451171875,
+    "std_time_ms": 0.04663674617134615,
+    "min_time_ms": 0.28896331787109375,
+    "max_time_ms": 0.4570484161376953,
+    "sequence_length": 30,
+    "target": "< 50ms",
+    "status": "\u2705 PASS"
+  },
+  "data_export": {
+    "geotiff_export_ms": 65.91987609863281,
+    "geotiff_status": "\u2705 PASS",
+    "csv_export_ms": 4.043102264404297,
+    "csv_status": "\u2705 PASS"
+  },
+  "synthetic_sensor_generation": {
+    "soil_moisture_ms": 1.0387897491455078,
+    "temperature_ms": 0.8649826049804688,
+    "humidity_ms": 0.19693374633789062,
+    "total_ms": 2.100706100463867,
+    "status": "\u2705 PASS"
+  }
+}

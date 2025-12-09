@@ -27,6 +27,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 from utils.error_handler import safe_page, handle_data_loading, logger
 from ai_models.crop_health_predictor import CropHealthPredictor
 from database.db_manager import DatabaseManager
+from data_processing.day_wise_map_viewer import DayWiseMapViewer
 
 @safe_page
 def show_page():
@@ -77,6 +78,10 @@ def show_page():
         
         # Display metadata
         display_imagery_metadata(selected_imagery)
+        
+        # Add day-wise map viewer section
+        st.markdown("---")
+        display_day_wise_map_section(imagery_list)
         
         # Zone details panel
         if 'selected_zone' in st.session_state and st.session_state.selected_zone:
@@ -318,6 +323,39 @@ def display_interactive_map(imagery, db_manager):
     # Add monitoring zones with vegetation index coloring
     add_monitoring_zones(m, imagery, index_path)
     
+    # Add AI prediction overlay if enabled
+    if st.session_state.get('map_show_predictions', True):
+        try:
+            from dashboard.components.model_overlay import (
+                create_prediction_overlay,
+                add_prediction_legend,
+                create_prediction_summary_card,
+                display_prediction_statistics
+            )
+            
+            predictor = st.session_state.crop_health_predictor
+            opacity = st.session_state.get('map_opacity', 0.7)
+            
+            # Create prediction overlay
+            prediction_overlay = create_prediction_overlay(
+                index_data,
+                (bounds.left, bounds.bottom, bounds.right, bounds.top),
+                predictor,
+                opacity=opacity
+            )
+            
+            if prediction_overlay:
+                prediction_overlay.add_to(m)
+                add_prediction_legend(m)
+                
+                # Store predictions for statistics display
+                result = predictor.predict(index_data)
+                st.session_state.current_predictions = result
+                st.session_state.current_index_data = index_data
+        except Exception as e:
+            logger.error(f"Error adding prediction overlay: {e}")
+            st.warning("AI predictions unavailable for this view")
+    
     # Add alerts if enabled
     if st.session_state.get('map_show_alerts', True):
         alerts = db_manager.get_active_alerts(limit=10)
@@ -339,6 +377,32 @@ def display_interactive_map(imagery, db_manager):
     
     # Display statistics for the selected index
     display_index_statistics(valid_data, selected_index)
+    
+    # Display AI prediction statistics if available
+    if st.session_state.get('map_show_predictions', True) and 'current_predictions' in st.session_state:
+        st.markdown("---")
+        try:
+            from dashboard.components.model_overlay import (
+                display_prediction_statistics,
+                create_prediction_summary_card
+            )
+            
+            result = st.session_state.current_predictions
+            
+            # Display summary card
+            summary_html = create_prediction_summary_card(
+                result.predictions,
+                result.confidence_scores
+            )
+            st.markdown(summary_html, unsafe_allow_html=True)
+            
+            # Display detailed statistics
+            display_prediction_statistics(
+                result.predictions,
+                result.confidence_scores
+            )
+        except Exception as e:
+            logger.error(f"Error displaying prediction statistics: {e}")
 
 
 
@@ -765,6 +829,27 @@ def get_zone_from_coordinates(lat, lng):
         return "Khanna District Fields"
     
     return None
+
+def display_day_wise_map_section(imagery_list):
+    """Display day-wise map viewer section"""
+    
+    if len(imagery_list) < 2:
+        st.info("Day-wise map comparison requires at least 2 imagery dates. More satellite data will enable this feature.")
+        return
+    
+    # Add expandable section for day-wise map viewer
+    with st.expander("🗺️ Day-Wise Map View", expanded=False):
+        try:
+            # Initialize day-wise map viewer
+            map_viewer = DayWiseMapViewer(imagery_list)
+            
+            # Render the viewer
+            map_viewer.render_temporal_map_viewer()
+        
+        except Exception as e:
+            logger.error(f"Error rendering day-wise map viewer: {e}")
+            st.error(f"Error loading day-wise map viewer: {str(e)}")
+            st.info("This feature requires folium and rasterio libraries.")
 
 def display_zone_details():
     """Display detailed information for selected zone"""

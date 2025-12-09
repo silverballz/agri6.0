@@ -1,0 +1,73 @@
+{
+  "demonstration_date": "2025-12-08T17:53:42.913785",
+  "satellite_data": {
+    "date": "2024-09-23",
+    "location": "Ludhiana, Punjab",
+    "bands": [
+      "B02",
+      "B03",
+      "B04",
+      "B08"
+    ],
+    "resolution": "10m",
+    "area_analyzed": "512x512 pixels"
+  },
+  "synthetic_sensors": {
+    "soil_moisture": {
+      "mean": 32.96122360229492,
+      "unit": "%"
+    },
+    "temperature": {
+      "mean": 28.005829397768416,
+      "unit": "\u00b0C"
+    },
+    "humidity": {
+      "mean": 77.86750393343804,
+      "unit": "%"
+    },
+    "leaf_wetness": {
+      "mean": 0.43021860191428174,
+      "unit": "0-1"
+    }
+  },
+  "crop_health": {
+    "Healthy": {
+      "count": 0,
+      "percentage": 0.0,
+      "avg_confidence": 0.0
+    },
+    "Moderate": {
+      "count": 99574,
+      "percentage": 37.984466552734375,
+      "avg_confidence": 0.0007472869695594149
+    },
+    "Stressed": {
+      "count": 131707,
+      "percentage": 50.24223327636719,
+      "avg_confidence": 0.002072287527055662
+    },
+    "Critical": {
+      "count": 30863,
+      "percentage": 11.773300170898438,
+      "avg_confidence": 0.002443845423423918
+    }
+  },
+  "time_series": {
+    "pixels": 50,
+    "days": 30,
+    "total_points": 1500
+  },
+  "models": {
+    "cnn": {
+      "parameters": 1931620,
+      "status": "initialized"
+    },
+    "lstm": {
+      "parameters": 77601,
+      "status": "initialized"
+    },
+    "rule_based": {
+      "status": "active"
+    }
+  }
+}

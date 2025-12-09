@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 from src.sensors.data_fusion import (
-    DataFusionEngine, SpectralAnomaly, CorrelationResult, Alert
+    DataFusionEngine, FusedDataPoint
 )
 from src.sensors.data_ingestion import SensorReading
 from src.sensors.temporal_alignment import AlignedReading

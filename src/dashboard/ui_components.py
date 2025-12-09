@@ -6,6 +6,63 @@ Provides tooltips, help text, color schemes, and visual consistency across all p
 import streamlit as st
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+import os
+from pathlib import Path
+
+# ============================================================================
+# THEME LOADER FUNCTION
+# ============================================================================
+
+def apply_custom_theme():
+    """
+    Apply custom CSS theme to Streamlit dashboard
+    
+    Loads the custom_theme.css file and injects it into the Streamlit app.
+    Includes responsive media queries for tablet (768px) and desktop (1024px+).
+    
+    Requirements: 7.1, 7.5
+    """
+    
+    # Get the path to the CSS file
+    css_file_path = Path(__file__).parent / 'styles' / 'custom_theme.css'
+    
+    # Check if CSS file exists
+    if not css_file_path.exists():
+        st.warning(f"⚠️ Custom theme file not found at {css_file_path}")
+        return
+    
+    # Read the CSS file
+    try:
+        with open(css_file_path, 'r', encoding='utf-8') as f:
+            css_content = f.read()
+        
+        # Inject CSS into Streamlit
+        st.markdown(f"""
+        <style>
+        {css_content}
+        </style>
+        """, unsafe_allow_html=True)
+        
+    except Exception as e:
+        st.error(f"❌ Error loading custom theme: {str(e)}")
+
+
+def load_custom_fonts():
+    """
+    Load custom fonts from Google Fonts
+    
+    Loads Inter and Roboto font families for use throughout the dashboard.
+    This is called automatically by apply_custom_theme().
+    
+    Requirements: 7.1
+    """
+    
+    st.markdown("""
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    """, unsafe_allow_html=True)
+
 
 # ============================================================================
 # COLOR SCHEMES AND CONSTANTS
@@ -281,9 +338,9 @@ Assesses the reliability of satellite imagery.
 
 def metric_card(title: str, value: str, delta: Optional[str] = None, 
                 delta_color: str = "normal", icon: str = "", 
-                help_text: Optional[str] = None):
+                help_text: Optional[str] = None, metric_type: str = "default"):
     """
-    Display a styled metric card with consistent formatting
+    Display a styled metric card with gradient backgrounds and animations
     
     Args:
         title: Metric title
@@ -292,6 +349,9 @@ def metric_card(title: str, value: str, delta: Optional[str] = None,
         delta_color: Color for delta ("normal", "inverse", "off")
         icon: Emoji icon (optional)
         help_text: Tooltip text (optional)
+        metric_type: Type of metric for gradient styling ("default", "success", "warning", "info", "error")
+    
+    Requirements: 7.2, 7.4
     """
     
     # Determine delta styling
@@ -302,9 +362,20 @@ def metric_card(title: str, value: str, delta: Optional[str] = None,
         else:
             delta_class = "metric-delta-positive" if delta.startswith("+") else "metric-delta-negative"
     
-    # Build HTML
+    # Determine gradient based on metric type
+    gradients = {
+        "default": "linear-gradient(135deg, #2d3748 0%, #3d4a5c 100%)",
+        "success": "linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(102, 187, 106, 0.15) 100%)",
+        "warning": "linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(255, 167, 38, 0.15) 100%)",
+        "info": "linear-gradient(135deg, rgba(33, 150, 243, 0.15) 0%, rgba(66, 165, 245, 0.15) 100%)",
+        "error": "linear-gradient(135deg, rgba(244, 67, 54, 0.15) 0%, rgba(239, 83, 80, 0.15) 100%)"
+    }
+    
+    gradient = gradients.get(metric_type, gradients["default"])
+    
+    # Build HTML with enhanced styling
     html = f"""
-    <div class="metric-container">
+    <div class="metric-container hover-lift" style="background: {gradient};">
         <div class="metric-title">{icon} {title}</div>
         <div class="metric-value">{value}</div>
     """
@@ -320,9 +391,103 @@ def metric_card(title: str, value: str, delta: Optional[str] = None,
         with col1:
             st.markdown(html, unsafe_allow_html=True)
         with col2:
-            st.markdown(f'<span title="{help_text}">ℹ️</span>', unsafe_allow_html=True)
+            st.markdown(f'<span title="{help_text}" style="cursor: help; font-size: 1.2em;">ℹ️</span>', unsafe_allow_html=True)
     else:
         st.markdown(html, unsafe_allow_html=True)
+
+
+def metric_card_with_chart(title: str, value: str, chart_data: Optional[List[float]] = None,
+                           delta: Optional[str] = None, delta_color: str = "normal", 
+                           icon: str = "", metric_type: str = "default"):
+    """
+    Display an enhanced metric card with a mini sparkline chart
+    
+    Args:
+        title: Metric title
+        value: Metric value
+        chart_data: List of values for sparkline (optional)
+        delta: Change indicator (optional)
+        delta_color: Color for delta ("normal", "inverse", "off")
+        icon: Emoji icon (optional)
+        metric_type: Type of metric for gradient styling
+    
+    Requirements: 7.2, 7.4
+    """
+    
+    # Determine delta styling
+    delta_class = ""
+    if delta and delta_color != "off":
+        if delta_color == "inverse":
+            delta_class = "metric-delta-negative" if delta.startswith("+") else "metric-delta-positive"
+        else:
+            delta_class = "metric-delta-positive" if delta.startswith("+") else "metric-delta-negative"
+    
+    # Determine gradient based on metric type
+    gradients = {
+        "default": "linear-gradient(135deg, #2d3748 0%, #3d4a5c 100%)",
+        "success": "linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(102, 187, 106, 0.15) 100%)",
+        "warning": "linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(255, 167, 38, 0.15) 100%)",
+        "info": "linear-gradient(135deg, rgba(33, 150, 243, 0.15) 0%, rgba(66, 165, 245, 0.15) 100%)",
+        "error": "linear-gradient(135deg, rgba(244, 67, 54, 0.15) 0%, rgba(239, 83, 80, 0.15) 100%)"
+    }
+    
+    gradient = gradients.get(metric_type, gradients["default"])
+    
+    # Build HTML
+    html = f"""
+    <div class="metric-container hover-lift" style="background: {gradient};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="flex: 1;">
+                <div class="metric-title">{icon} {title}</div>
+                <div class="metric-value">{value}</div>
+    """
+    
+    if delta:
+        html += f'<div class="metric-delta {delta_class}">{delta}</div>'
+    
+    html += """
+            </div>
+    """
+    
+    # Add sparkline if chart data provided
+    if chart_data and len(chart_data) > 0:
+        # Normalize data for sparkline
+        min_val = min(chart_data)
+        max_val = max(chart_data)
+        range_val = max_val - min_val if max_val != min_val else 1
+        
+        # Create SVG sparkline
+        width = 80
+        height = 40
+        points = []
+        for i, val in enumerate(chart_data):
+            x = (i / (len(chart_data) - 1)) * width if len(chart_data) > 1 else width / 2
+            y = height - ((val - min_val) / range_val) * height
+            points.append(f"{x},{y}")
+        
+        polyline = " ".join(points)
+        
+        html += f"""
+            <div style="margin-left: 1rem;">
+                <svg width="{width}" height="{height}" style="opacity: 0.6;">
+                    <polyline
+                        points="{polyline}"
+                        fill="none"
+                        stroke="#4caf50"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            </div>
+        """
+    
+    html += """
+        </div>
+    </div>
+    """
+    
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def info_box(message: str, box_type: str = "info", icon: Optional[str] = None):
@@ -744,3 +909,267 @@ def format_file_size(size_bytes: int) -> str:
         size_bytes /= 1024.0
     
     return f"{size_bytes:.1f} PB"
+
+
+# ============================================================================
+# SYNTHETIC DATA LABELING COMPONENTS
+# ============================================================================
+
+def synthetic_data_badge(is_synthetic: bool = True, show_tooltip: bool = True):
+    """
+    Display a badge indicating synthetic data
+    
+    Args:
+        is_synthetic: Whether the data is synthetic
+        show_tooltip: Whether to show explanatory tooltip
+    """
+    
+    if not is_synthetic:
+        return
+    
+    tooltip_text = """This data is synthetically generated based on satellite imagery correlations. 
+It simulates real IoT sensor readings for demonstration purposes."""
+    
+    badge_html = f"""
+    <span style="
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: bold;
+        display: inline-block;
+        margin-left: 8px;
+        cursor: help;
+    " title="{tooltip_text if show_tooltip else ''}">
+        🤖 SYNTHETIC
+    </span>
+    """
+    
+    st.markdown(badge_html, unsafe_allow_html=True)
+
+
+def synthetic_data_indicator(
+    value: float,
+    unit: str,
+    is_synthetic: bool = True,
+    correlation_source: Optional[str] = None,
+    show_details: bool = False
+):
+    """
+    Display a data value with synthetic indicator
+    
+    Args:
+        value: The data value
+        unit: Unit of measurement
+        is_synthetic: Whether the data is synthetic
+        correlation_source: Source of correlation (e.g., 'ndvi_based')
+        show_details: Whether to show detailed information
+    """
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.metric(label="", value=f"{value:.2f} {unit}")
+    
+    with col2:
+        if is_synthetic:
+            synthetic_data_badge(is_synthetic=True, show_tooltip=True)
+    
+    if show_details and is_synthetic and correlation_source:
+        st.caption(f"📊 Generated from: {correlation_source.replace('_', ' ').title()}")
+
+
+def synthetic_data_toggle(key: str = "show_synthetic_data") -> bool:
+    """
+    Display a toggle to show/hide synthetic data
+    
+    Args:
+        key: Unique key for the toggle
+    
+    Returns:
+        Boolean indicating whether to show synthetic data
+    """
+    
+    show_synthetic = st.checkbox(
+        "Show Synthetic Sensor Data",
+        value=True,
+        key=key,
+        help="Toggle to show/hide synthetically generated sensor data. "
+             "Synthetic data is algorithmically generated based on satellite imagery "
+             "to simulate real IoT sensor readings."
+    )
+    
+    if show_synthetic:
+        info_box(
+            "🤖 Synthetic sensor data is displayed. This data is generated based on "
+            "satellite-derived vegetation indices and environmental correlations.",
+            box_type="info"
+        )
+    
+    return show_synthetic
+
+
+def synthetic_data_info_panel():
+    """
+    Display an information panel explaining synthetic data
+    """
+    
+    with st.expander("ℹ️ About Synthetic Sensor Data", expanded=False):
+        st.markdown("""
+        ### What is Synthetic Sensor Data?
+        
+        Synthetic sensor data is algorithmically generated environmental measurements that 
+        simulate real IoT sensor readings. This data is created using scientifically-based 
+        correlations with satellite imagery.
+        
+        ### How is it Generated?
+        
+        **Soil Moisture** 🌱
+        - Correlated with NDVI (vegetation health)
+        - Higher NDVI → Higher soil moisture
+        - Correlation coefficient: >0.5
+        
+        **Temperature** 🌡️
+        - Based on seasonal patterns (sinusoidal)
+        - Location-adjusted for Ludhiana latitude
+        - Includes daily variation and realistic noise
+        
+        **Humidity** 💧
+        - Inversely correlated with temperature
+        - Influenced by soil moisture
+        - Correlation coefficient: <-0.3
+        
+        **Leaf Wetness** 🍃
+        - Based on humidity and temperature
+        - High humidity + moderate temp → High wetness
+        - Used for pest risk assessment
+        
+        ### Why Use Synthetic Data?
+        
+        - **Demonstration**: Show system capabilities without physical sensors
+        - **Testing**: Validate algorithms and workflows
+        - **Training**: Educate users on data interpretation
+        - **Gap Filling**: Supplement sparse real sensor networks
+        
+        ### Limitations
+        
+        ⚠️ Synthetic data should not replace real sensor measurements for production decisions.
+        It is intended for demonstration, testing, and training purposes only.
+        
+        ### Validation
+        
+        All synthetic data includes:
+        - Realistic noise characteristics (CV: 0.05-0.20)
+        - Temporal autocorrelation for continuity
+        - Scientifically-validated correlation patterns
+        - Clear labeling as synthetic in all displays
+        """)
+
+
+def sensor_data_card(
+    sensor_type: str,
+    value: float,
+    unit: str,
+    is_synthetic: bool = True,
+    timestamp: Optional[datetime] = None,
+    location: Optional[tuple] = None,
+    metadata: Optional[Dict[str, Any]] = None
+):
+    """
+    Display a comprehensive sensor data card with synthetic labeling
+    
+    Args:
+        sensor_type: Type of sensor (e.g., 'soil_moisture', 'temperature')
+        value: Sensor reading value
+        unit: Unit of measurement
+        is_synthetic: Whether the data is synthetic
+        timestamp: Timestamp of reading
+        location: (lat, lon) tuple
+        metadata: Additional metadata
+    """
+    
+    # Icon mapping
+    icons = {
+        'soil_moisture': '💧',
+        'temperature': '🌡️',
+        'humidity': '💨',
+        'leaf_wetness': '🍃'
+    }
+    
+    icon = icons.get(sensor_type, '📊')
+    display_name = sensor_type.replace('_', ' ').title()
+    
+    # Build card HTML
+    card_html = f"""
+    <div style="
+        background-color: {ColorScheme.BG_CARD};
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        border: 2px solid {ColorScheme.BORDER};
+        position: relative;
+    ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="color: {ColorScheme.PRIMARY}; margin: 0;">
+                {icon} {display_name}
+            </h3>
+    """
+    
+    if is_synthetic:
+        card_html += f"""
+            <span style="
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-size: 11px;
+                font-weight: bold;
+            ">
+                🤖 SYNTHETIC
+            </span>
+        """
+    
+    card_html += f"""
+        </div>
+        <div style="
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: {ColorScheme.TEXT_PRIMARY};
+            margin: 1rem 0;
+        ">
+            {value:.2f} {unit}
+        </div>
+    """
+    
+    # Add metadata if available
+    if timestamp:
+        card_html += f"""
+        <div style="color: {ColorScheme.TEXT_SECONDARY}; font-size: 0.9rem;">
+            📅 {timestamp.strftime('%Y-%m-%d %H:%M')}
+        </div>
+        """
+    
+    if location:
+        card_html += f"""
+        <div style="color: {ColorScheme.TEXT_SECONDARY}; font-size: 0.9rem;">
+            📍 {location[0]:.4f}°N, {location[1]:.4f}°E
+        </div>
+        """
+    
+    if metadata and is_synthetic:
+        if 'correlation_source' in metadata:
+            card_html += f"""
+        <div style="
+            color: {ColorScheme.TEXT_MUTED};
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            font-style: italic;
+        ">
+            Generated from: {metadata['correlation_source'].replace('_', ' ').title()}
+        </div>
+            """
+    
+    card_html += "</div>"
+    
+    st.markdown(card_html, unsafe_allow_html=True)

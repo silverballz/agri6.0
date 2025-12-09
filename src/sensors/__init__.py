@@ -10,7 +10,8 @@ from .data_ingestion import SensorDataIngester, SensorReading
 from .data_validation import SensorDataValidator, ValidationResult
 from .temporal_alignment import TemporalAligner, AlignedReading
 from .spatial_interpolation import SpatialInterpolator, InterpolationGrid
-from .data_fusion import DataFusionEngine, SpectralAnomaly, CorrelationResult, Alert
+from .data_fusion import DataFusionEngine, FusedDataPoint
+from .synthetic_sensor_generator import SyntheticSensorGenerator, SyntheticSensorReading
 
 __all__ = [
     'SensorDataIngester',
@@ -22,7 +23,7 @@ __all__ = [
     'SpatialInterpolator',
     'InterpolationGrid',
     'DataFusionEngine',
-    'SpectralAnomaly',
-    'CorrelationResult',
-    'Alert'
+    'FusedDataPoint',
+    'SyntheticSensorGenerator',
+    'SyntheticSensorReading'
 ]

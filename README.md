@@ -21,6 +21,14 @@ Smart Agricultural Intelligence Platform - An AI-powered solution for monitoring
 - **RESTful API** for system integration
 - **Role-based Access Control** for team collaboration
 
+### Real Satellite Data Integration
+- **Sentinel Hub API Integration** for downloading real Sentinel-2 imagery
+- **Automated Data Pipeline** for processing multi-temporal satellite data
+- **AI Model Training** on real agricultural data (85%+ accuracy)
+- **Data Quality Validation** ensuring production-ready datasets
+- **Model Comparison Tools** to quantify improvements over synthetic data
+- **Comprehensive Logging** for debugging and data provenance tracking
+
 ## 📋 Quick Start
 
 ### Option 1: Docker Deployment (Recommended)
@@ -64,6 +72,38 @@ streamlit run run_dashboard.py
 ./scripts/deploy.sh -e staging
 
 # Access at http://localhost:8502
+```
+
+### Option 4: Real Satellite Data Pipeline
+
+Train AI models on real Sentinel-2 satellite imagery:
+
+```bash
+# Step 1: Set up Sentinel Hub credentials
+export SENTINEL_HUB_CLIENT_ID=your_client_id
+export SENTINEL_HUB_CLIENT_SECRET=your_client_secret
+
+# Step 2: Download real satellite data (15-20 imagery dates)
+python scripts/download_real_satellite_data.py --target-count 20
+
+# Step 3: Validate data quality
+python scripts/validate_data_quality.py
+
+# Step 4: Prepare training datasets
+python scripts/prepare_real_training_data.py
+python scripts/prepare_lstm_training_data.py
+
+# Step 5: Train models on real data
+python scripts/train_cnn_on_real_data.py --epochs 50
+python scripts/train_lstm_on_real_data.py --epochs 100
+
+# Step 6: Deploy trained models
+python scripts/deploy_real_trained_models.py
+
+# Step 7: Enable AI predictions
+echo "USE_AI_MODELS=true" >> .env
+
+# See docs/REAL_DATA_PIPELINE_GUIDE.md for complete documentation
 ```
 
 ## 🏗️ System Architecture
@@ -197,6 +237,14 @@ agriflux/
 - 🔧 **[Technical Documentation](docs/technical-documentation.md)** - System administration guide
 - 🏗️ **[Architecture Overview](docs/architecture.md)** - System design and components
 - 🔌 **[API Reference](docs/api-reference.md)** - REST API documentation
+
+### Real Data Pipeline Documentation
+- 🛰️ **[Real Data Pipeline Guide](docs/REAL_DATA_PIPELINE_GUIDE.md)** - Complete guide for downloading and processing real satellite data
+- ⚡ **[Quick Reference](docs/REAL_DATA_QUICK_REFERENCE.md)** - Quick commands and troubleshooting
+- 🔍 **[API Troubleshooting](docs/API_TROUBLESHOOTING_GUIDE.md)** - Detailed solutions for API issues
+- 📝 **[Scripts Documentation](scripts/README_REAL_DATA_PIPELINE.md)** - Pipeline scripts reference
+- 📊 **[Model Deployment Guide](docs/MODEL_DEPLOYMENT_GUIDE.md)** - Deploying trained models
+- 📋 **[Logging System](docs/LOGGING_SYSTEM.md)** - Comprehensive logging documentation
 
 ### Deployment Guides
 - 🚀 **[Quick Start Guide](#quick-start)** - Get up and running in minutes

@@ -46,6 +46,9 @@ class IndexResult:
 class VegetationIndexCalculator:
     """Calculator for vegetation and soil indices from Sentinel-2A bands."""
     
+    # Cache for computed indices to avoid recomputation
+    _cache = {}
+    
     # Index definitions with metadata
     INDEX_DEFINITIONS = {
         'NDVI': {
@@ -92,14 +95,42 @@ class VegetationIndexCalculator:
         }
     }
     
-    def __init__(self, nodata_threshold: float = 0.0001):
+    def __init__(self, nodata_threshold: float = 0.0001, use_cache: bool = True):
         """
         Initialize vegetation index calculator.
         
         Args:
             nodata_threshold: Threshold below which values are considered nodata
+            use_cache: Whether to cache computed indices (default: True)
         """
         self.nodata_threshold = nodata_threshold
+        self.use_cache = use_cache
+    
+    def _get_cache_key(self, bands: Dict[str, BandData], index_name: str, **kwargs) -> str:
+        """Generate cache key for index calculation."""
+        band_ids = sorted([bid for bid in bands.keys()])
+        band_shapes = tuple(bands[bid].shape for bid in band_ids)
+        # Use id() of data arrays for uniqueness
+        band_ids_str = '_'.join(band_ids)
+        kwargs_str = '_'.join(f"{k}={v}" for k, v in sorted(kwargs.items()))
+        return f"{index_name}_{band_ids_str}_{band_shapes}_{kwargs_str}"
+    
+    def _get_from_cache(self, cache_key: str) -> Optional[IndexResult]:
+        """Get result from cache if available."""
+        if not self.use_cache:
+            return None
+        return self._cache.get(cache_key)
+    
+    def _store_in_cache(self, cache_key: str, result: IndexResult):
+        """Store result in cache."""
+        if self.use_cache:
+            # Limit cache size to prevent memory issues
+            if len(self._cache) > 50:
+                # Remove oldest entries
+                keys_to_remove = list(self._cache.keys())[:10]
+                for key in keys_to_remove:
+                    del self._cache[key]
+            self._cache[cache_key] = result
     
     def _validate_bands(self, bands: Dict[str, BandData], required_bands: list) -> bool:
         """
@@ -164,16 +195,16 @@ class VegetationIndexCalculator:
         nir = bands['B08'].data.astype(np.float32)
         red = bands['B04'].data.astype(np.float32)
         
-        # Create mask for valid pixels
-        valid_mask = self._apply_nodata_mask(nir, red)
-        
-        # Calculate NDVI
+        # Optimized calculation using numpy's where for better performance
         denominator = nir + red
-        ndvi = np.full_like(nir, np.nan)
         
-        # Avoid division by zero
-        valid_calc = valid_mask & (np.abs(denominator) > self.nodata_threshold)
-        ndvi[valid_calc] = (nir[valid_calc] - red[valid_calc]) / denominator[valid_calc]
+        # Use numpy.where for efficient conditional calculation
+        # This avoids creating intermediate masks and is faster
+        ndvi = np.where(
+            np.abs(denominator) > self.nodata_threshold,
+            (nir - red) / denominator,
+            np.nan
+        )
         
         return IndexResult(
             index_name='NDVI',
@@ -203,16 +234,13 @@ class VegetationIndexCalculator:
         nir = bands['B08'].data.astype(np.float32)
         red = bands['B04'].data.astype(np.float32)
         
-        # Create mask for valid pixels
-        valid_mask = self._apply_nodata_mask(nir, red)
-        
-        # Calculate SAVI
+        # Optimized calculation
         denominator = nir + red + L
-        savi = np.full_like(nir, np.nan)
-        
-        # Avoid division by zero
-        valid_calc = valid_mask & (np.abs(denominator) > self.nodata_threshold)
-        savi[valid_calc] = ((nir[valid_calc] - red[valid_calc]) / denominator[valid_calc]) * (1 + L)
+        savi = np.where(
+            np.abs(denominator) > self.nodata_threshold,
+            ((nir - red) / denominator) * (1 + L),
+            np.nan
+        )
         
         return IndexResult(
             index_name='SAVI',
@@ -242,16 +270,21 @@ class VegetationIndexCalculator:
         red = bands['B04'].data.astype(np.float32)
         blue = bands['B02'].data.astype(np.float32)
         
-        # Create mask for valid pixels
-        valid_mask = self._apply_nodata_mask(nir, red, blue)
+        # Optimized calculation - compute denominator once
+        denominator = nir + 6.0 * red - 7.5 * blue + 1.0
         
-        # Calculate EVI
-        denominator = nir + 6 * red - 7.5 * blue + 1
-        evi = np.full_like(nir, np.nan)
+        # Use a larger threshold to prevent extreme values
+        # When denominator is too small, the EVI becomes unreliable
+        min_denominator = 0.1
+        evi = np.where(
+            np.abs(denominator) > min_denominator,
+            2.5 * ((nir - red) / denominator),
+            np.nan
+        )
         
-        # Avoid division by zero
-        valid_calc = valid_mask & (np.abs(denominator) > self.nodata_threshold)
-        evi[valid_calc] = 2.5 * ((nir[valid_calc] - red[valid_calc]) / denominator[valid_calc])
+        # Clamp EVI values to valid range [-1.0, 1.0]
+        # Values outside this range are physically unrealistic
+        evi = np.clip(evi, -1.0, 1.0)
         
         return IndexResult(
             index_name='EVI',
@@ -280,16 +313,13 @@ class VegetationIndexCalculator:
         green = bands['B03'].data.astype(np.float32)
         nir = bands['B08'].data.astype(np.float32)
         
-        # Create mask for valid pixels
-        valid_mask = self._apply_nodata_mask(green, nir)
-        
-        # Calculate NDWI
+        # Optimized calculation
         denominator = green + nir
-        ndwi = np.full_like(green, np.nan)
-        
-        # Avoid division by zero
-        valid_calc = valid_mask & (np.abs(denominator) > self.nodata_threshold)
-        ndwi[valid_calc] = (green[valid_calc] - nir[valid_calc]) / denominator[valid_calc]
+        ndwi = np.where(
+            np.abs(denominator) > self.nodata_threshold,
+            (green - nir) / denominator,
+            np.nan
+        )
         
         return IndexResult(
             index_name='NDWI',

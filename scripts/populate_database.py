@@ -129,13 +129,14 @@ def populate_from_existing_data(db_manager: DatabaseManager,
             f"on {metadata['acquisition_date']}"
         )
     
-    # Save to database
+    # Save to database (mark as real data from SAFE file)
     imagery_id = db_manager.save_processed_imagery(
         acquisition_date=metadata['acquisition_date'],
         tile_id=metadata['tile_id'],
         cloud_coverage=metadata['cloud_coverage'],
         geotiff_paths=geotiff_paths,
-        metadata=metadata
+        metadata=metadata,
+        synthetic=False  # This is real Sentinel-2 data from SAFE file
     )
     
     logger.info(f"Successfully saved imagery record with ID: {imagery_id}")
@@ -161,13 +162,14 @@ def populate_with_reprocessing(db_manager: DatabaseManager,
     # Run full processing pipeline
     results = process_sentinel2_safe_directory(safe_dir, processed_dir)
     
-    # Save to database
+    # Save to database (mark as real data from SAFE file)
     imagery_id = db_manager.save_processed_imagery(
         acquisition_date=results['metadata']['acquisition_date'],
         tile_id=results['metadata']['tile_id'],
         cloud_coverage=results['metadata']['cloud_coverage'],
         geotiff_paths=results['geotiff_paths'],
-        metadata=results['metadata']
+        metadata=results['metadata'],
+        synthetic=False  # This is real Sentinel-2 data from SAFE file
     )
     
     logger.info(f"Successfully saved imagery record with ID: {imagery_id}")

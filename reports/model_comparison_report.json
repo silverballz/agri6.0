@@ -1,0 +1,194 @@
+{
+  "comparison_date": "2025-12-09T08:33:48.696223",
+  "summary": {
+    "overall_improvements": {
+      "accuracy": 0.55,
+      "precision": 0.6105500470610541,
+      "recall": 0.55,
+      "f1_score": 0.6855671799234974
+    },
+    "best_improved_class": {
+      "name": "Healthy",
+      "improvements": {
+        "precision_improvement": 0.9219143576826196,
+        "recall_improvement": 0.9581151832460733,
+        "f1_improvement": 0.9396662387676509
+      }
+    },
+    "per_class_improvements": {
+      "Healthy": {
+        "precision_improvement": 0.9219143576826196,
+        "recall_improvement": 0.9581151832460733,
+        "f1_improvement": 0.9396662387676509
+      },
+      "Moderate": {
+        "precision_improvement": 0.42841880341880345,
+        "recall_improvement": 0.75,
+        "f1_improvement": 0.7642935138676566
+      },
+      "Stressed": {
+        "precision_improvement": 0.5013790386130811,
+        "recall_improvement": 0.6934306569343065,
+        "f1_improvement": 0.6470661620992224
+      },
+      "Critical": {
+        "precision_improvement": 0.5960234733819639,
+        "recall_improvement": -0.11494252873563215,
+        "f1_improvement": 0.43147955146391836
+      }
+    }
+  },
+  "synthetic_model": {
+    "model_type": "CNN",
+    "training_data": "synthetic",
+    "metrics": {
+      "accuracy": 0.28625,
+      "precision": 0.22542710205151242,
+      "recall": 0.28625,
+      "f1_score": 0.1502589649594713,
+      "mean_confidence": 0.950700044631958,
+      "confusion_matrix": [
+        [
+          0,
+          5,
+          33,
+          344
+        ],
+        [
+          0,
+          3,
+          45,
+          324
+        ],
+        [
+          0,
+          0,
+          25,
+          386
+        ],
+        [
+          0,
+          0,
+          5,
+          430
+        ]
+      ],
+      "classification_report": {
+        "Healthy": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1-score": 0.0,
+          "support": 382.0
+        },
+        "Moderate": {
+          "precision": 0.375,
+          "recall": 0.008064516129032258,
+          "f1-score": 0.015789473684210527,
+          "support": 372.0
+        },
+        "Stressed": {
+          "precision": 0.23148148148148148,
+          "recall": 0.06082725060827251,
+          "f1-score": 0.09633911368015415,
+          "support": 411.0
+        },
+        "Critical": {
+          "precision": 0.28975741239892183,
+          "recall": 0.9885057471264368,
+          "f1-score": 0.4481500781657113,
+          "support": 435.0
+        },
+        "accuracy": 0.28625,
+        "macro avg": {
+          "precision": 0.22405972347010084,
+          "recall": 0.26434937846593537,
+          "f1-score": 0.140069666382519,
+          "support": 1600.0
+        },
+        "weighted avg": {
+          "precision": 0.22542710205151242,
+          "recall": 0.28625,
+          "f1-score": 0.1502589649594713,
+          "support": 1600.0
+        }
+      }
+    }
+  },
+  "real_model": {
+    "model_type": "CNN",
+    "training_data": "real_satellite_data",
+    "data_source": "Sentinel-2 via Sentinel Hub API",
+    "metrics": {
+      "accuracy": 0.83625,
+      "precision": 0.8359771491125665,
+      "recall": 0.83625,
+      "f1_score": 0.8358261448829687,
+      "mean_confidence": 0.927224338054657,
+      "confusion_matrix": [
+        [
+          366,
+          16,
+          0,
+          0
+        ],
+        [
+          31,
+          282,
+          59,
+          0
+        ],
+        [
+          0,
+          52,
+          310,
+          49
+        ],
+        [
+          0,
+          1,
+          54,
+          380
+        ]
+      ],
+      "classification_report": {
+        "Healthy": {
+          "precision": 0.9219143576826196,
+          "recall": 0.9581151832460733,
+          "f1-score": 0.9396662387676509,
+          "support": 382.0
+        },
+        "Moderate": {
+          "precision": 0.8034188034188035,
+          "recall": 0.7580645161290323,
+          "f1-score": 0.7800829875518672,
+          "support": 372.0
+        },
+        "Stressed": {
+          "precision": 0.7328605200945626,
+          "recall": 0.754257907542579,
+          "f1-score": 0.7434052757793765,
+          "support": 411.0
+        },
+        "Critical": {
+          "precision": 0.8857808857808858,
+          "recall": 0.8735632183908046,
+          "f1-score": 0.8796296296296297,
+          "support": 435.0
+        },
+        "accuracy": 0.83625,
+        "macro avg": {
+          "precision": 0.8359936417442178,
+          "recall": 0.8360002063271224,
+          "f1-score": 0.835696032932131,
+          "support": 1600.0
+        },
+        "weighted avg": {
+          "precision": 0.8359771491125665,
+          "recall": 0.83625,
+          "f1-score": 0.8358261448829687,
+          "support": 1600.0
+        }
+      }
+    }
+  }
+}
