@@ -1,2 +1,4 @@
-gdal-bin
 libgdal-dev
+gdal-bin
+libproj-dev
+proj-bin
